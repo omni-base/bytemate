@@ -1,0 +1,32 @@
+cargo-features = ["edition2024"]
+[package]
+
+name = "bytemate"
+version = "0.2.0"
+edition = "2024"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tokio = { version = "1.21.2", features = ["full"] }
+poise = { git = "https://github.com/serenity-rs/poise", branch = "serenity-next", features = ["cache"]}
+
+
+
+chrono = "0.4.35"
+serde_yaml = "0.9.33"
+memory-stats = "1.1.0"
+tokio-tungstenite = "0.23.1"
+axum = { version = "0.7.5" }
+log = "0.4.21"
+serde_json = "1.0.114"
+reqwest = { version = "0.12.2", features = ["json"] }
+serde = { version = "1.0.197", features = ["derive"] }
+regex = "1.10.5"
+futures = "0.3.30"
+rand = "0.8.5"
+thiserror = "1.0.63"
+sysinfo = "0.30.13"
+async-trait = "0.1.81"
+diesel = { version = "2.2.2", features = ["postgres", "chrono"]}
+dotenvy = "0.15.7"
