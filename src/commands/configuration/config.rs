@@ -7,6 +7,9 @@ use poise::{command, CreateReply, Modal, send_reply};
 use poise::serenity_prelude::{ActionRowComponent, CacheHttp, ChannelId, ChannelType, ComponentInteraction, ComponentInteractionDataKind, CreateActionRow, CreateEmbed,  CreateInteractionResponse, CreateInteractionResponseMessage, CreateSelectMenu, CreateSelectMenuKind, CreateSelectMenuOption, InputText, Message, ModalInteraction};
 use poise::serenity_prelude::small_fixed_array::{FixedArray};
 use crate::database::models::{Logs, ModerationSettings};
+use crate::database::schema::logs::log_types;
+use crate::modules::moderation::logs::{get_active_log_types, LogType};
+use crate::util::color::BotColors;
 
 const INTERACTION_TIMEOUT: Duration = Duration::from_secs(60);
 
@@ -39,7 +42,8 @@ fn create_config_embed() -> CreateEmbed<'static> {
     CreateEmbed::new()
         .title("Configuration")
         .description("Select a module to configure")
-        .field("Modules", "1. Moderation", false)
+        .color(BotColors::Default.color())
+        .field("Modules", "Moderation", false)
 }
 
 
@@ -49,6 +53,7 @@ fn create_config_embed() -> CreateEmbed<'static> {
 fn create_log_channel_config_embed() -> CreateEmbed<'static> {
     CreateEmbed::new()
         .title("Set Log Channel")
+        .color(BotColors::Default.color())
         .description("Select a channel to set as the log channel")
 }
 
@@ -63,6 +68,7 @@ fn create_log_channel_select_menu(logs_table: Logs) -> CreateActionRow<'static> 
 fn create_warn_expire_time_config_embed() -> CreateEmbed<'static> {
     CreateEmbed::new()
         .title("Set Warn Expire Time")
+        .color(BotColors::Default.color())
         .description("Select a time for warnings to expire")
 }
 
@@ -138,9 +144,17 @@ fn get_modal_value(interaction: &ModalInteraction) -> Result<String, BotError> {
 }
 
 async fn create_moderation_config_embed(moderation_table: ModerationSettings, logs_table: Logs) -> CreateEmbed<'static> {
+    let active_log_types = get_active_log_types(logs_table.log_types as u32);
+    
     CreateEmbed::new()
         .title("Moderation Config")
-        .field("Log Channel", Some(logs_table.default_log_channel.unwrap()).map_or("None".to_string(), |id| format!("<#{}>", id)), false)
+        .color(BotColors::Default.color())
+        .field("Log Channel", logs_table.default_log_channel
+                .map(|id| format!("<#{}>", id))
+                .unwrap_or_else(|| "None".to_string()),
+            false
+        )
+        .field("Log Types", active_log_types.join(", "), false)
         .field("Warn Expire Time", format!("{:?} days", moderation_table.warn_expire_time.unwrap()), false)
 }
 
@@ -168,6 +182,7 @@ async fn moderation_config(ctx: Context<'_>, interaction: ComponentInteraction) 
             .embed(create_moderation_config_embed(moderation_table.clone(), logs_table.clone()).await)
             .components(vec![create_select_menu("moderation_config", vec![
                 ("Log Channel", "log_channel"),
+                ("Log Types", "log_types"),
                 ("Warn Expire Time", "warn_expire_time")
             ])])
     )).await?;
@@ -175,6 +190,7 @@ async fn moderation_config(ctx: Context<'_>, interaction: ComponentInteraction) 
     if let Some(interaction) = await_interaction(&ctx, &interaction.message, "moderation_config").await {
         match get_selected_value(&interaction)?.as_str() {
             "log_channel" => edit_log_channel(ctx, interaction).await?,
+            "log_types" => edit_log_types(ctx, interaction).await?,
             "warn_expire_time" => edit_warn_expire_time(ctx, interaction).await?,
             _ => {}
         }
@@ -227,6 +243,75 @@ async fn edit_log_channel(ctx: Context<'_>, interaction: ComponentInteraction) -
     Ok(())
 }
 
+fn get_selected_values(interaction: &ComponentInteraction) -> Result<Vec<String>, BotError> {
+    match &interaction.data.kind {
+        ComponentInteractionDataKind::StringSelect { values } => Ok(Vec::from(values.clone())),
+        _ => Err(BotError::from("Invalid interaction data kind"))
+    }
+}
+
+
+async fn edit_log_types(ctx: Context<'_>, interaction: ComponentInteraction) -> Result<(), BotError> {
+    use crate::database::schema::logs::dsl::*;
+    
+    let logs_table = ctx.data().db.run(|conn| {
+        logs
+            .filter(guild_id.eq(ctx.guild_id().unwrap().get() as i64))
+            .first::<Logs>(conn)
+    }).await?;
+    
+    let active_log_types = get_active_log_types(logs_table.log_types as u32);
+    
+    interaction.create_response(ctx.http(), CreateInteractionResponse::UpdateMessage(
+        CreateInteractionResponseMessage::default()
+            .embed(CreateEmbed::new()
+                .title("Log Types")
+                .description("Select the log types you want to enable")
+                .color(BotColors::Default.color())
+                .field("Active Log Types", active_log_types.join(", "), false)
+                .field("Log Types", "Clear Messages, Clear Channel, Mute, Unmute, Kick, Lock, Unlock, Ban, Unban, Warn, Remove Warn, Remove Multiple Warns", false)
+            )
+            .components(vec![CreateActionRow::SelectMenu(
+                CreateSelectMenu::new("log_types", CreateSelectMenuKind::String {
+                    options: Cow::Owned(vec![
+                        CreateSelectMenuOption::new("Clear Messages", "1").default_selection(active_log_types.contains(&LogType::ClearMessages.to_string())),
+                        CreateSelectMenuOption::new("Clear Channel", "2").default_selection(active_log_types.contains(&LogType::ClearChannel.to_string())),
+                        CreateSelectMenuOption::new("Mute", "4").default_selection(active_log_types.contains(&LogType::Mute.to_string())),
+                        CreateSelectMenuOption::new("Unmute", "8").default_selection(active_log_types.contains(&LogType::Unmute.to_string())),
+                        CreateSelectMenuOption::new("Kick", "16").default_selection(active_log_types.contains(&LogType::Kick.to_string())),
+                        CreateSelectMenuOption::new("Lock", "32").default_selection(active_log_types.contains(&LogType::Lock.to_string())),
+                        CreateSelectMenuOption::new("Unlock", "64").default_selection(active_log_types.contains(&LogType::Unlock.to_string())),
+                        CreateSelectMenuOption::new("Ban", "128").default_selection(active_log_types.contains(&LogType::Ban.to_string())),
+                        CreateSelectMenuOption::new("Unban", "256").default_selection(active_log_types.contains(&LogType::Unban.to_string())),
+                        CreateSelectMenuOption::new("Warn", "512").default_selection(active_log_types.contains(&LogType::Warn.to_string())),
+                        CreateSelectMenuOption::new("Remove Warn", "1024").default_selection(active_log_types.contains(&LogType::RemoveWarn.to_string())),
+                        CreateSelectMenuOption::new("Remove Multiple Warns", "2048").default_selection(active_log_types.contains(&LogType::RemoveMultipleWarns.to_string())),
+                    ])
+                }).max_values(12)
+            )])
+    )).await?;
+    
+    if let Some(interaction) = await_interaction(&ctx, &interaction.message, "log_types").await {
+        let selected_types: i32 = get_selected_values(&interaction)?.iter().map(|s| s.parse::<i32>().unwrap()).sum();
+        
+        ctx.data().db.run(move |conn| {
+            diesel::update(logs.filter(guild_id.eq(ctx.guild_id().unwrap().get() as i64)))
+                .set(log_types.eq(selected_types))
+                .execute(conn)
+        }).await?;
+        
+        interaction.create_response(ctx.http(), CreateInteractionResponse::UpdateMessage(
+            CreateInteractionResponseMessage::default()
+                .embed(CreateEmbed::new()
+                    .title("Log Types Set")
+                    .description(format!("Log types set to: {}", get_active_log_types(selected_types as u32).join(", ")))
+                )
+                .components(vec![])
+        )).await?;
+    }
+    
+    Ok(())
+}
 async fn edit_warn_expire_time(ctx: Context<'_>, interaction: ComponentInteraction) -> Result<(), BotError> {
     use crate::database::schema::moderation_settings::dsl::*;
 
