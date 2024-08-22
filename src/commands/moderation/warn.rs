@@ -54,7 +54,7 @@ pub async fn warn(
     let guild = ctx.guild_id().unwrap();
     let data = ctx.data();
     let action_points = action_points.unwrap_or(1);
-    let action_reason = action_reason.unwrap();
+    let action_reason = action_reason;
 
     let new_case_id: i32 = data.db.run(|conn| {
         cases
@@ -88,7 +88,7 @@ pub async fn warn(
         moderator_id: ctx.author().id.get() as i64,
         case_id: new_case_id,
         case_type: "WARN".to_string(),
-        reason: Some(action_reason.clone()).or(None),
+        reason: action_reason.clone().or(None),
         created_at: chrono::Utc::now(),
         end_date: end_res_date,
         points: Some(action_points).or(None),
@@ -127,7 +127,7 @@ pub async fn warn(
         guild_id: Some(guild.get()),
         user_id: Some(user.user.id.get()),
         moderator_id: Some(ctx.author().id),
-        reason: Some(action_reason_for_logging),
+        reason: action_reason_for_logging,
         case_id: Some(new_case_id),
         points: Some(action_points),
         duration: end_res_date.map(|_| expire_time.to_string()),
