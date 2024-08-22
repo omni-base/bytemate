@@ -23,7 +23,7 @@ pub struct Logs {
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct ModerationSettings {
     pub guild_id: i64,
-    pub warn_expire_time: Option<i64>,
+    pub warn_expire_time: i64,
 }
 
 #[derive(Queryable, Selectable, Insertable, Clone, Debug)]

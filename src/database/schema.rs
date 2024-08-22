@@ -30,6 +30,8 @@ diesel::table! {
 diesel::table! {
     guild_settings (guild_id) {
         guild_id -> Int8,
+        #[max_length = 255]
+        lang -> Varchar,
     }
 }
 
@@ -45,7 +47,7 @@ diesel::table! {
 diesel::table! {
     moderation_settings (guild_id) {
         guild_id -> Int8,
-        warn_expire_time -> Nullable<Int8>,
+        warn_expire_time -> Int8,
     }
 }
 

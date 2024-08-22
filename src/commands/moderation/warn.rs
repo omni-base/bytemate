@@ -69,8 +69,8 @@ pub async fn warn(
         moderation_settings
             .filter(moderation_settings_guild_id.eq(guild.get() as i64))
             .select(warn_expire_time)
-            .first::<Option<i64>>(conn)
-    }).await?.unwrap_or(3);
+            .first::<i64>(conn)
+    }).await?;
 
 
 

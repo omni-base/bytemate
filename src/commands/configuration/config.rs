@@ -73,7 +73,7 @@ fn create_warn_expire_time_config_embed() -> CreateEmbed<'static> {
 }
 
 fn create_warn_expire_time_select_menu(moderation: ModerationSettings) -> CreateActionRow<'static> {
-    let current_time = moderation.warn_expire_time.unwrap();
+    let current_time = moderation.warn_expire_time;
 
     let mut options = vec![
         CreateSelectMenuOption::new("3 days", "3").default_selection(current_time == 3),
@@ -145,7 +145,7 @@ fn get_modal_value(interaction: &ModalInteraction) -> Result<String, BotError> {
 
 async fn create_moderation_config_embed(moderation_table: ModerationSettings, logs_table: Logs) -> CreateEmbed<'static> {
     let active_log_types = get_active_log_types(logs_table.log_types as u32);
-    
+
     CreateEmbed::new()
         .title("Moderation Config")
         .color(BotColors::Default.color())
@@ -155,7 +155,7 @@ async fn create_moderation_config_embed(moderation_table: ModerationSettings, lo
             false
         )
         .field("Log Types", active_log_types.join(", "), false)
-        .field("Warn Expire Time", format!("{:?} days", moderation_table.warn_expire_time.unwrap()), false)
+        .field("Warn Expire Time", format!("{:?} days", moderation_table.warn_expire_time), false)
 }
 
 
@@ -253,15 +253,15 @@ fn get_selected_values(interaction: &ComponentInteraction) -> Result<Vec<String>
 
 async fn edit_log_types(ctx: Context<'_>, interaction: ComponentInteraction) -> Result<(), BotError> {
     use crate::database::schema::logs::dsl::*;
-    
+
     let logs_table = ctx.data().db.run(|conn| {
         logs
             .filter(guild_id.eq(ctx.guild_id().unwrap().get() as i64))
             .first::<Logs>(conn)
     }).await?;
-    
+
     let active_log_types = get_active_log_types(logs_table.log_types as u32);
-    
+
     interaction.create_response(ctx.http(), CreateInteractionResponse::UpdateMessage(
         CreateInteractionResponseMessage::default()
             .embed(CreateEmbed::new()
@@ -290,16 +290,16 @@ async fn edit_log_types(ctx: Context<'_>, interaction: ComponentInteraction) -> 
                 }).max_values(12)
             )])
     )).await?;
-    
+
     if let Some(interaction) = await_interaction(&ctx, &interaction.message, "log_types").await {
         let selected_types: i32 = get_selected_values(&interaction)?.iter().map(|s| s.parse::<i32>().unwrap()).sum();
-        
+
         ctx.data().db.run(move |conn| {
             diesel::update(logs.filter(guild_id.eq(ctx.guild_id().unwrap().get() as i64)))
                 .set(log_types.eq(selected_types))
                 .execute(conn)
         }).await?;
-        
+
         interaction.create_response(ctx.http(), CreateInteractionResponse::UpdateMessage(
             CreateInteractionResponseMessage::default()
                 .embed(CreateEmbed::new()
@@ -309,7 +309,7 @@ async fn edit_log_types(ctx: Context<'_>, interaction: ComponentInteraction) -> 
                 .components(vec![])
         )).await?;
     }
-    
+
     Ok(())
 }
 async fn edit_warn_expire_time(ctx: Context<'_>, interaction: ComponentInteraction) -> Result<(), BotError> {
@@ -332,7 +332,7 @@ async fn edit_warn_expire_time(ctx: Context<'_>, interaction: ComponentInteracti
 
         let days = if selected_days == "custom" {
             let response = WarnExpireTimeModal::create(
-                Some(WarnExpireTimeModal { warn_expire_custom_time: moderation_table.warn_expire_time.unwrap().to_string() }),
+                Some(WarnExpireTimeModal { warn_expire_custom_time: moderation_table.warn_expire_time.to_string() }),
                 "warn_expire_custom_time_modal".parse()?
             );
             interaction.create_response(ctx.http(), response).await?;
