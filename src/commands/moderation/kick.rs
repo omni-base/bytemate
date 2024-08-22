@@ -53,9 +53,9 @@ pub async fn kick(
         return Ok(());
     }
     
-    let action_reason_string = action_reason.clone().unwrap_or_else(|| "No action_reason".to_string());
+    let action_reason = action_reason.clone().unwrap();
 
-    user.kick(ctx.http(), action_reason.as_deref()).await?;
+    user.kick(ctx.http(), Some(action_reason.as_ref()).or(None)).await?;
 
     let data = ctx.data();
 
@@ -71,7 +71,7 @@ pub async fn kick(
         moderator_id: ctx.author().id.get() as i64,
         case_id: new_case_id,
         case_type: "KICK".to_string(),
-        reason: action_reason.clone().or(None),
+        reason: Some(action_reason.clone()).or(None),
         created_at: chrono::Utc::now(),
         end_date: None,
         points: None,
@@ -87,7 +87,7 @@ pub async fn kick(
     send_reply(ctx, CreateReply::new().content(format!(
         "Kicked {} with action_reason: {}",
         user.user.tag(),
-        action_reason.as_deref().unwrap_or("No action_reason")
+        if action_reason.is_empty() { "No reason provided" } else { &action_reason }
     )).ephemeral(false)).await?;
 
     let log_data = LogData {
@@ -96,7 +96,7 @@ pub async fn kick(
         guild_id: Some(ctx.guild_id().unwrap().get()),
         channel_id: Some(ctx.channel_id().get()),
         user_id: Some(user.user.id.get()),
-        reason: Option::from(action_reason_string), 
+        reason: Option::from(action_reason), 
         case_id: Some(new_case_id),
         ..Default::default()
     };

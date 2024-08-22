@@ -54,7 +54,7 @@ pub async fn warn(
     let guild = ctx.guild_id().unwrap();
     let data = ctx.data();
     let action_points = action_points.unwrap_or(1);
-    let action_reason = action_reason.unwrap_or_else(|| "No reason provided".to_string());
+    let action_reason = action_reason.unwrap();
 
     let new_case_id: i32 = data.db.run(|conn| {
         cases

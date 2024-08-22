@@ -123,7 +123,7 @@ pub async fn ban(
 
     let duration_text = duration.clone().map(|d| format!(" for {}", d)).unwrap_or_else(|| "permanently".to_string());
     send_reply(ctx,
-               CreateReply::new().content(format!("Banned {} {}{}", user.user.tag(), duration_text, action_reason.clone().map(|r| format!(" with reason: {}", r)).unwrap_or_default())).ephemeral(false)
+               CreateReply::new().content(format!("Banned {} {}{}", user.user.tag(), duration_text, action_reason.clone().map(|r| format!(" with reason: {}", r)).unwrap_or("No reason provided".to_string()))).ephemeral(false)
     ).await?;
     
     let data = ctx.data().clone();

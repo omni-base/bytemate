@@ -83,17 +83,15 @@ pub async fn mute(
     let expires_at: Option<DateTime<Utc>> = parse_to_time(duration.clone()).map(|d| {
         Utc::now() + chrono::Duration::seconds(d as i64)
     });
-
-    let reason_string = action_reason.clone().unwrap_or_else(|| "No reason".to_string());
-
-    // TODO: Rewrite all reasons to be Reason or None
+    
+    
     let new_case: Cases = Cases {
         guild_id: ctx.guild_id().unwrap().get() as i64,
         user_id: user.user.id.get() as i64,
         moderator_id: ctx.author().id.get() as i64,
         case_id: new_case_id,
         case_type: "MUTE".to_string(),
-        reason: Option::from(reason_string.clone()),
+        reason: action_reason.clone(),
         created_at: Utc::now(),
         end_date: Some(expires_at.unwrap()).or(None),
         points: None
@@ -119,7 +117,7 @@ pub async fn mute(
         user_id: Some(user.user.id.get()),
         moderator_id: Some(ctx.author().id),
         duration: Some(duration),
-        reason: Some(reason_string),  
+        reason: action_reason.or(None), 
         case_id: Some(new_case_id),
         ..LogData::default()
     };
