@@ -1,3 +1,4 @@
+use std::ops::BitAnd;
 use chrono::Utc;
 use diesel::{ExpressionMethods};
 use poise::serenity_prelude::{CacheHttp, ChannelId, Context, CreateEmbed, CreateEmbedAuthor, CreateEmbedFooter, CreateMessage, GuildId, Timestamp, UserId};
@@ -8,7 +9,7 @@ use diesel_async::RunQueryDsl;
 use crate::database::schema::logs::dsl::logs;
 use crate::util::color::BotColors;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 #[repr(u32)]
 pub enum LogType {
     ClearMessages = 1 << 0,      // 00000001
@@ -23,6 +24,53 @@ pub enum LogType {
     Warn = 1 << 9,               // 00000010 00000000
     RemoveWarn = 1 << 10,        // 00000100 00000000
     RemoveMultipleWarns = 1 << 11, // 00001000 00000000
+}
+
+impl LogType {
+    pub fn to_string(&self) -> &'static str {
+        match self {
+            LogType::ClearMessages => "Clear Messages",
+            LogType::ClearChannel => "Clear Channel",
+            LogType::Mute => "Mute",
+            LogType::Unmute => "Unmute",
+            LogType::Kick => "Kick",
+            LogType::Lock => "Lock",
+            LogType::Unlock => "Unlock",
+            LogType::Ban => "Ban",
+            LogType::Unban => "Unban",
+            LogType::Warn => "Warn",
+            LogType::RemoveWarn => "Remove Warn",
+            LogType::RemoveMultipleWarns => "Remove Multiple Warns",
+        }
+    }
+    pub fn as_bit(&self) -> u32 {
+        *self as u32
+    }
+}
+
+pub fn get_active_log_types(mask: u32) -> Vec<&'static str> {
+    let mut active_types = Vec::new();
+
+    for &log_type in &[
+        LogType::ClearMessages,
+        LogType::ClearChannel,
+        LogType::Mute,
+        LogType::Unmute,
+        LogType::Kick,
+        LogType::Lock,
+        LogType::Unlock,
+        LogType::Ban,
+        LogType::Unban,
+        LogType::Warn,
+        LogType::RemoveWarn,
+        LogType::RemoveMultipleWarns,
+    ] {
+        if mask & log_type.as_bit() != 0 {
+            active_types.push(log_type.to_string());
+        }
+    }
+
+    active_types
 }
 
 #[derive(Default)]
@@ -62,24 +110,35 @@ impl<'a> LogData<'a> {
     }
 }
 
+impl BitAnd<LogType> for i32 {
+    type Output = bool;
 
+    fn bitand(self, rhs: LogType) -> Self::Output {
+        let mask: u32 = self as u32;
+        mask & rhs.as_bit() != 0
+    }
+}
 
 pub async fn log_action(log_type: LogType, log_data: LogData<'_>) -> Result<(), BotError> {
     use crate::database::schema::logs::*;
     let data = log_data.data.unwrap();
-
-    
     
     let log = data.db.run(|conn| {
         logs
             .filter(guild_id.eq(log_data.guild_id.unwrap() as i64))
             .select(Logs::as_select())
             .first::<Logs>(conn)
-    }).await?; 
+    }).await?;
     
     let log_embed = create_log_embed(&log_type, &log_data).await;
-    
+
     if log.default_log_channel.is_none() {
+        return Ok(());
+    }
+
+    let active_types: u32 = log.log_types as u32;
+    
+    if active_types & log_type.as_bit() == 0 {
         return Ok(());
     }
 
