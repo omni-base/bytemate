@@ -124,6 +124,7 @@ pub async fn messages(
 pub async fn channel(
     ctx: Context<'_>,
     #[description = "Channel to clear"]
+    #[channel_types("Text")]
     channel: Option<GuildChannel>,
 ) -> Result<(), BotError> {
     let channel = if let Some(channel) = channel {

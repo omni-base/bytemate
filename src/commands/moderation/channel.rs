@@ -13,6 +13,7 @@ pub async fn channel(_: Context<'_>) -> Result<(), BotError> { Ok(()) }
 pub async fn lock(
     ctx: Context<'_>,
     #[description = "Channel to lock"]
+    #[channel_types("Text")]
     channel: Option<GuildChannel>,
     #[description = "Reason for locking the channel"]
     reason: Option<String>
