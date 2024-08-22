@@ -90,7 +90,7 @@ async fn main() {
 
     let mut client = serenity::ClientBuilder::new(&config.token, serenity::GatewayIntents::all())
         .framework(framework)
-        .activity(poise::serenity_prelude::ActivityData::custom("𝗠𝗘𝗢𝗪 𝗠𝗢𝗗𝗘𝗥𝗔𝗧𝗢𝗥"))
+        .activity(poise::serenity_prelude::ActivityData::custom("𝗜'𝗠 𝗧𝗛𝗘 𝗠𝗘𝗢𝗪 𝗠𝗢𝗗𝗘𝗥𝗔𝗧𝗢𝗥"))
         .data(Arc::new(Data {
             has_started: AtomicBool::new(false),
             db,
