@@ -14,7 +14,7 @@ pub struct GuildSettings {
 pub struct Logs {
     pub id: i32,
     pub guild_id: i64,
-    pub default_log_channel: i64,
+    pub default_log_channel: Option<i64>,
     pub log_types: i32,
 }
 

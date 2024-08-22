@@ -25,6 +25,8 @@ pub mod database {
     pub mod models;
 
     pub mod manager;
+
+    pub mod upsert;
 }
 
 pub mod util {
@@ -158,6 +160,19 @@ async fn event_handler(
                 new_message.reply(framework.serenity_context.http(), "Hello!").await?;
             }
         },
+        serenity::FullEvent::CacheReady { guilds} => {
+            let data = framework.user_data();
+            let db = data.db.clone();
+            database::upsert::upsert_database(db, guilds).await?;
+        },
+        serenity::FullEvent::GuildCreate { guild, is_new } => {
+            let data = framework.user_data();
+            let db = data.db.clone();
+            if is_new.expect("Expected a boolean value for is_new") {
+                let guild_ids = vec![guild.id];
+                database::upsert::upsert_database(db, &guild_ids).await?;
+            }
+        }
         _ => {}
     }
     Ok(())

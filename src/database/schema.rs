@@ -37,7 +37,7 @@ diesel::table! {
     logs (id) {
         id -> Int4,
         guild_id -> Int8,
-        default_log_channel -> Int8,
+        default_log_channel -> Nullable<Int8>,
         log_types -> Int4,
     }
 }
