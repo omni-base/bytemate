@@ -67,18 +67,14 @@ pub async fn log_action(log_type: LogType, log_data: LogData<'_>) -> Result<(), 
     use crate::database::schema::logs::*;
     let data = log_data.data.unwrap();
 
-    let mut db_conn = match data.db.try_lock() {
-        Ok(guard) => guard,
-        Err(_) => {
-            eprintln!("Nie można uzyskać locka na bazie danych");
-            return Ok(());
-        }
-    };
     
-    let log = logs
-        .filter(guild_id.eq(log_data.guild_id.unwrap() as i64))
-        .select(Logs::as_select())
-        .first::<Logs>(&mut *db_conn).await.unwrap();
+    
+    let log = data.db.run(|conn| {
+        logs
+            .filter(guild_id.eq(log_data.guild_id.unwrap() as i64))
+            .select(Logs::as_select())
+            .first::<Logs>(conn)
+    }).await?; 
     
     let log_embed = create_log_embed(&log_type, &log_data).await;
 

@@ -8,24 +8,20 @@ use crate::Data;
 
 use crate::database::models::*;
 use diesel::prelude::*;
-use diesel_async::{RunQueryDsl};
+use diesel_async::{ RunQueryDsl};
 use poise::serenity_prelude::nonmax::NonMaxU64;
 use crate::modules::moderation::logs::{log_action, LogData, LogType};
 
 async fn unban_check(data: Arc<Data>, ctx: Arc<Context>, data_about_bot: Ready) -> Result<(), Box<dyn error::Error>> {
     use crate::database::schema::cases::dsl::*;
-
-    let mut db_conn = data.db.lock().await;
-
-    let cases_results = cases
-        .filter(case_type.eq("BAN"))
-        .filter(end_date.lt(now))
-        .select(Cases::as_select())
-        .load::<Cases>(&mut *db_conn).await.unwrap();
     
-
-    
-    
+    let cases_results = data.db.run(|conn| {
+        cases
+            .filter(case_type.eq("BAN"))
+            .filter(end_date.lt(now))
+            .select(Cases::as_select())
+            .load::<Cases>(conn)
+    }).await?;
     
     for case in cases_results {
        let guild = GuildId::new(u64::from(NonMaxU64::try_from(case.guild_id as u64).unwrap()));
@@ -45,8 +41,10 @@ async fn unban_check(data: Arc<Data>, ctx: Arc<Context>, data_about_bot: Ready) 
         };
         
         log_action(LogType::Unban, log_data).await.unwrap();
-        
-        let _ = diesel::delete(cases.filter(case_id.eq(case.case_id))).execute(&mut *db_conn);
+
+        let _ = data.db.run(|conn| {
+            diesel::delete(cases.filter(case_id.eq(case.case_id))).execute(conn)
+        }).await?;
     }
     
     Ok(())
@@ -56,14 +54,15 @@ async fn unban_check(data: Arc<Data>, ctx: Arc<Context>, data_about_bot: Ready) 
 async fn remove_warn_check(data: Arc<Data>, ctx: Arc<Context>, data_about_bot: Ready) -> Result<(), Box<dyn error::Error>> {
     use crate::database::schema::cases::dsl::*;
     
-    let mut db_conn = data.db.lock().await;
     
-    let cases_results = cases
-        .filter(case_type.eq("WARN"))
-        .filter(end_date.lt(now))
-        .select(Cases::as_select())
-        .load::<Cases>(&mut *db_conn)
-        .await.unwrap();
+    
+    let cases_results = data.db.run(|conn| {
+        cases
+            .filter(case_type.eq("WARN"))
+            .filter(end_date.lt(now))
+            .select(Cases::as_select())
+            .load::<Cases>(conn)
+    }).await?;
     
     
     
@@ -82,7 +81,10 @@ async fn remove_warn_check(data: Arc<Data>, ctx: Arc<Context>, data_about_bot: R
 
         log_action(LogType::RemoveWarn, log_data).await.unwrap();
 
-        let _ = diesel::delete(cases.filter(case_id.eq(case.case_id))).execute(&mut *db_conn);
+        
+        let _ = data.db.run(|conn| {
+            diesel::delete(cases.filter(case_id.eq(case.case_id))).execute(conn)
+        }).await?;
     }
     Ok(())
 }

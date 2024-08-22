@@ -14,15 +14,16 @@ use dotenvy::dotenv;
 use poise::serenity_prelude as serenity;
 use poise::serenity_prelude::{CacheHttp, Command, UserId};
 use serde::{Deserialize, Serialize};
-use tokio::sync::Mutex;
 use crate::commands::utils::*;
 use crate::commands::moderation::*;
-
+use crate::database::manager::DbManager;
 use crate::modules::moderation::notifications::notification_loop;
 
 pub mod database {
     pub mod schema;
     pub mod models;
+    
+    pub mod manager;
 }
 
 pub mod util {
@@ -54,26 +55,13 @@ struct Config {
 
 pub struct Data {
     pub has_started: AtomicBool,
-    pub db: Arc<Mutex<AsyncPgConnection>>,
+    pub db: Arc<DbManager>,
     pub global_commands: Arc<RwLock<Vec<Command>>>,
     pub client_id: Arc<RwLock<UserId>>,
 }
 pub type BotError = Box<dyn std::error::Error + Send + Sync>;
 pub type Context<'a> = poise::Context<'a, Data, BotError>;
 
-
-pub async fn establish_connection() -> Result<AsyncPgConnection, Box<dyn std::error::Error>> {
-    dotenv().ok();
-
-    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-    match AsyncPgConnection::establish(&database_url).await {
-        Ok(conn) => Ok(conn),
-        Err(e) => {
-            eprintln!("Error connecting to {}: {}", database_url, e);
-            Err(Box::new(e))
-        }
-    }
-}
 
 
 
@@ -94,15 +82,14 @@ async fn main() {
         .build();
 
 
-    let connection = establish_connection().await.expect("Failed to establish connection");
-    let connection = Arc::new(Mutex::new(connection));
+    let db = Arc::new(DbManager::new(&config.database_url).await.unwrap()); 
     
     let mut client = serenity::ClientBuilder::new(&config.token, serenity::GatewayIntents::all())
         .framework(framework)
         .activity(poise::serenity_prelude::ActivityData::custom("If you could fly a plane to Pluto, the trip would take more than 800 years!"))
         .data(Arc::new(Data {
             has_started: AtomicBool::new(false),
-            db: connection,
+            db,
             global_commands: Arc::new(RwLock::new(Vec::new())),
             client_id: Arc::new(RwLock::new(UserId::default())),
         }) as _)

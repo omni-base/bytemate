@@ -1,11 +1,11 @@
 use diesel::associations::HasTable;
+use diesel::QueryDsl;
 use diesel_async::RunQueryDsl;
 use poise::{command, CreateReply, send_reply};
 use poise::serenity_prelude::{Member};
 use crate::{BotError, Context};
 use crate::database::models::Cases;
 use crate::modules::moderation::logs::{log_action, LogData, LogType};
-use crate::util::util::generate_case_id;
 
 /// Kick a user
 #[command(slash_command, default_member_permissions="ADMINISTRATOR", guild_only)]
@@ -58,10 +58,12 @@ pub async fn kick(
     user.kick(ctx.http(), action_reason.as_deref()).await?;
 
     let data = ctx.data();
-    
-    let mut db_conn = data.db.lock().await;
-    
-    let new_case_id = generate_case_id(&mut db_conn).await;
+
+    let new_case_id: i32 = data.db.run(|conn| {
+        cases
+            .select(diesel::dsl::max(case_id))
+            .first::<Option<i32>>(conn)
+    }).await?.unwrap_or(0) + 1;
 
     let new_case: Cases = Cases {
         guild_id: ctx.guild_id().unwrap().get() as i64,
@@ -75,11 +77,11 @@ pub async fn kick(
         points: None,
     };
     
-    diesel::insert_into(cases::table())
-        .values(&new_case)
-        .execute(&mut *db_conn)
-        .await
-        .expect("Failed to insert case into database");
+    data.db.run(|conn| {
+        diesel::insert_into(cases::table())
+            .values(&new_case)
+            .execute(conn)
+    }).await?; 
     
 
     send_reply(ctx, CreateReply::new().content(format!(

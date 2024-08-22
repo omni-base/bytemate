@@ -31,8 +31,7 @@ pub async fn view(
     let guild = ctx.guild_id().unwrap().get() as i64;
 
     let data = ctx.data();
-
-    let mut db_conn = data.db.lock().await;
+    
 
     if let Some(case_res_id) = case {
         if user.is_some() {
@@ -50,12 +49,14 @@ pub async fn view(
             return Ok(());
         }
 
-        let case = cases
-            .filter(guild_id.eq(guild))
-            .filter(case_id.eq(case_res_id))
-            .select(Cases::as_select())
-            .first::<Cases>(&mut *db_conn).await
-            .ok();
+        
+        let case = data.db.run(|conn| {
+            cases
+                .filter(guild_id.eq(guild))
+                .filter(case_id.eq(case_res_id))
+                .select(Cases::as_select())
+                .first::<Cases>(conn)
+        }).await.ok();
 
         if case.is_none() {
             ctx.say("No case found with the given ID.").await?;
@@ -117,12 +118,13 @@ pub async fn view(
 
         let moderator = UserId::new(u64::from(NonMaxU64::try_from(moderator_res.id.get()).unwrap())).to_user(ctx.http()).await?;
 
-        let cases_results = cases
-            .filter(guild_id.eq(guild))
-            .filter(moderator_id.eq(moderator.id.get() as i64))
-            .select(Cases::as_select())
-            .load::<Cases>(&mut *db_conn).await
-            .ok();
+        let cases_results = data.db.run(|conn| {
+            cases
+                .filter(guild_id.eq(guild))
+                .filter(moderator_id.eq(moderator.id.get() as i64))
+                .select(Cases::as_select())
+                .load::<Cases>(conn)
+        }).await.ok();
 
         if cases_results.is_none() {
             ctx.say(format!("No cases found for {}.", moderator.clone().global_name.unwrap())).await?;
@@ -167,21 +169,23 @@ pub async fn view(
 
     let cases_result = if let Some(ref user) = user {
         let user = UserId::new(u64::from(NonMaxU64::try_from(user.id.get()).unwrap()));
-        cases
-            .filter(guild_id.eq(guild))
-            .filter(user_id.eq(user.get() as i64))
-            .select(Cases::as_select())
-            .load::<Cases>(&mut *db_conn).await
-            .unwrap()
-    } else {
-        cases
-            .filter(guild_id.eq(guild))
-            .select(Cases::as_select())
-            .load::<Cases>(&mut *db_conn).await
-            .unwrap()
-    };
 
-    println!("{:?}", cases_result);
+        data.db.run(|conn| {
+            cases
+                .filter(guild_id.eq(guild))
+                .filter(user_id.eq(user.get() as i64))
+                .select(Cases::as_select())
+                .load::<Cases>(conn)
+        }).await?
+    } else {
+        data.db.run(|conn| {
+            cases
+                .filter(guild_id.eq(guild))
+                .select(Cases::as_select())
+                .load::<Cases>(conn)
+        }).await?
+    };
+    
     if cases_result.is_empty() {
         ctx.say("No cases found.").await?;
         return Ok(());
@@ -343,18 +347,18 @@ pub async fn remove(
         ctx.say("No valid case IDs provided.").await?;
         return Ok(());
     }
-
-    let mut db_conn = data.db.lock().await;
+    
 
     let mut response = String::new();
     let mut removed_warns: Vec<(UserId, i32, i32)> = Vec::new();
 
-    let all_cases = cases
+    let all_cases = data.db.run(|conn| {
+        cases
             .filter(guild_id.eq(guild as i64))
             .filter(case_id.eq_any(&case_ids))
             .select(Cases::as_select())
-            .load::<Cases>(&mut *db_conn).await
-            .unwrap_or_default();
+            .load::<Cases>(conn)
+    }).await?;
 
 
     let cases_map: HashMap<i32, Cases> = all_cases.into_iter().map(|c| (c.case_id, c)).collect();
@@ -406,12 +410,12 @@ pub async fn remove(
         }
     }
 
-    let _ = diesel::delete(
-        cases.filter(guild_id.eq(guild as i64))
-            .filter(case_id.eq_any(&case_ids))
-    ).execute(&mut *db_conn).await;
-
-    drop(db_conn);
+    let _ = data.db.run(|conn| {
+        diesel::delete(
+            cases.filter(guild_id.eq(guild as i64))
+                .filter(case_id.eq_any(&case_ids))
+        ).execute(conn)
+    }).await?;
 
     if !removed_warns.is_empty() {
         let log_data = LogData {

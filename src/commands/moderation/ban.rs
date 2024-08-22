@@ -9,7 +9,6 @@ use crate::database::models::Cases;
 use crate::modules::moderation::logs::{log_action, LogData, LogType};
 
 use crate::util::time::parse_to_time;
-use crate::util::util::generate_case_id;
 
 /// Ban a user
 #[command(slash_command, default_member_permissions="ADMINISTRATOR", guild_only)]
@@ -94,10 +93,13 @@ pub async fn ban(
     user.ban(ctx.http(), delete_message_days.unwrap_or(0), action_reason.as_deref().or(None)).await?;
 
     let data = ctx.data();
-    
-    let mut db_conn = data.db.lock().await;
 
-    let new_case_id = generate_case_id(&mut db_conn).await;
+
+    let new_case_id: i32 = data.db.run(|conn| {
+        cases
+            .select(diesel::dsl::max(case_id))
+            .first::<Option<i32>>(conn)
+    }).await?.unwrap_or(0) + 1;
 
     let new_case: Cases = Cases {
         guild_id: ctx.guild_id().unwrap().get() as i64,
@@ -111,10 +113,12 @@ pub async fn ban(
         points: None
     };
 
-    diesel::insert_into(cases::table())
-        .values(&new_case)
-        .execute(&mut *db_conn).await
-        .expect("Error saving new case");
+    let _ = data.db.run(|conn| {
+        diesel::insert_into(cases::table())
+            .values(&new_case)
+            .execute(conn)
+    }).await?;
+
     
 
     let duration_text = duration.clone().map(|d| format!(" for {}", d)).unwrap_or_else(|| "permanently".to_string());

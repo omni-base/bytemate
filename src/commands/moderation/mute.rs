@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use diesel::QueryDsl;
 use diesel_async::RunQueryDsl;
 use poise::{command, CreateReply, send_reply};
 use poise::serenity_prelude::{EditMember, Member};
@@ -6,7 +7,6 @@ use crate::{BotError, Context};
 use crate::database::models::Cases;
 use crate::modules::moderation::logs::{log_action, LogData, LogType};
 use crate::util::time::{date_after, parse_to_time};
-use crate::util::util::generate_case_id;
 
 /// Mute a user
 #[command(slash_command, default_member_permissions="ADMINISTRATOR", guild_only)]
@@ -62,10 +62,13 @@ pub async fn mute(
     user.edit(ctx.http(), builder).await?;
 
     let data = ctx.data().clone();
-    
-    let mut db_conn = data.db.lock().await;
-    
-    let new_case_id = generate_case_id(&mut db_conn).await;
+
+
+    let new_case_id: i32 = data.db.run(|conn| {
+        cases
+            .select(diesel::dsl::max(case_id))
+            .first::<Option<i32>>(conn)
+    }).await?.unwrap_or(0) + 1;
     
     let expires_at: Option<DateTime<Utc>> = parse_to_time(duration.clone()).map(|d| {
         Utc::now() + chrono::Duration::seconds(d as i64)
@@ -86,10 +89,11 @@ pub async fn mute(
         points: None
     };
     
-    diesel::insert_into(cases)
-        .values(&new_case)
-        .execute(&mut *db_conn).await.expect("Failed to insert case into database");
-    
+    data.db.run(|conn| {
+        diesel::insert_into(cases)
+            .values(&new_case)
+            .execute(conn)
+    }).await?;
 
     send_reply(ctx, CreateReply::new().content(format!(
         "Muted {} for {} with reason: {}",

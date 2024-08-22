@@ -10,7 +10,6 @@ use crate::database::schema::moderation_settings::dsl::moderation_settings;
 use crate::modules::moderation::logs::{log_action, LogData, LogType};
 use crate::util::color::BotColors;
 use crate::util::timestamp::{Format, TimestampExt};
-use crate::util::util::generate_case_id;
 
 #[command(slash_command, default_member_permissions="ADMINISTRATOR", guild_only)]
 pub async fn warn(
@@ -57,24 +56,22 @@ pub async fn warn(
     let action_points = action_points.unwrap_or(1);
     let action_reason = action_reason.unwrap_or_else(|| "No reason provided".to_string());
 
-    let mut db_conn = data.db.lock().await;
-
-    let new_case_id = generate_case_id(&mut db_conn).await;
+    let new_case_id: i32 = data.db.run(|conn| {
+        cases
+            .select(diesel::dsl::max(case_id))
+            .first::<Option<i32>>(conn)
+    }).await?.unwrap_or(0) + 1;
 
     use crate::database::schema::cases::dsl::guild_id as cases_guild_id;
     use crate::database::schema::moderation_settings::dsl::guild_id as moderation_settings_guild_id;
 
-    let expire_time = match moderation_settings
-        .filter(moderation_settings_guild_id.eq(guild.get() as i64))
-        .select(warn_expire_time)
-        .first::<Option<i64>>(&mut *db_conn).await {
-        Ok(Some(time)) => time,
-        Ok(None) => 3,
-        Err(_) => {
-            ctx.reply("Failed to retrieve moderation settings").await?;
-            return Ok(());
-        }
-    };
+    let expire_time: i64 = data.db.run(|conn| {
+        moderation_settings
+            .filter(moderation_settings_guild_id.eq(guild.get() as i64))
+            .select(warn_expire_time)
+            .first::<Option<i64>>(conn)
+    }).await?.unwrap_or(3);
+
 
 
     let end_res_date = if expire.unwrap_or(false) {
@@ -97,24 +94,26 @@ pub async fn warn(
         points: Some(action_points).or(None),
     };
 
-    diesel::insert_into(crate::database::schema::cases::table)
-        .values(&new_case)
-        .execute(&mut *db_conn).await.unwrap();
+    data.db.run(|conn| {
+        diesel::insert_into(crate::database::schema::cases::table)
+            .values(&new_case)
+            .execute(conn)
+    }).await?;
 
-    let total_points = cases
-        .filter(cases_guild_id.eq(guild.get() as i64))
-        .filter(user_id.eq(user.user.id.get() as i64))
-        .select(sum(points))
-        .first::<Option<i64>>(&mut *db_conn).await.unwrap().unwrap_or(action_points as i64);
-
-    drop(db_conn);
+    let total_points = data.db.run(|conn| {
+        cases
+            .filter(cases_guild_id.eq(guild.get() as i64))
+            .filter(user_id.eq(user.user.id.get() as i64))
+            .select(sum(points))
+            .first::<Option<i64>>(conn)
+    }).await.unwrap_or(Option::from(action_points as i64));
 
     let mut e = CreateEmbed::new()
         .title(format!("A warning of {} point{} has been issued", action_points, if action_points == 1 { "" } else { "s" }))
         .color(BotColors::Default.color())
         .field("User", format!("<@{}>", user.user.id), true)
         .field("Moderator", format!("<@{}>", ctx.author().id), true)
-        .field("Total Points", total_points.to_string(), true);
+        .field("Total Points", total_points.unwrap().to_string(), true);
 
     if let Some(end_res_date) = end_res_date {
         e = e.field("Expires", Timestamp::from(end_res_date).to_discord_timestamp(Format::LongDateShortTime), true);
