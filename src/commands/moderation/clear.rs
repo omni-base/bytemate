@@ -3,7 +3,7 @@ use std::path::Path;
 use std::time::Duration;
 use futures::stream::{self, StreamExt};
 use poise::{command, CreateReply, send_reply};
-use poise::serenity_prelude::{CreateAttachment, CreateChannel, CreateMessage, GetMessages, Member, Role};
+use poise::serenity_prelude::{Channel, CreateAttachment, CreateChannel, CreateMessage, GetMessages, GuildChannel, Member, Role};
 use crate::{BotError, Context};
 use crate::modules::moderation::logs::{log_action, LogData, LogType};
 
@@ -123,9 +123,15 @@ pub async fn messages(
 #[command(slash_command, default_member_permissions = "MANAGE_MESSAGES", guild_only)]
 pub async fn channel(
     ctx: Context<'_>,
+    #[description = "Channel to clear"]
+    channel: Option<GuildChannel>,
 ) -> Result<(), BotError> {
-    let channel = ctx.guild_channel().await.unwrap().clone();
-
+    let channel = if let Some(channel) = channel {
+        channel
+    } else {
+        ctx.guild_channel().await.unwrap()
+    };
+    
     let guild = ctx.guild().unwrap().clone();
     let new_channel = guild.create_channel(ctx.http(), CreateChannel::new(channel.name)
         .permissions(channel.permission_overwrites)
