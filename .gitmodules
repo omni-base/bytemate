@@ -1,0 +1,3 @@
+[submodule "bytemate-translations"]
+	path = bytemate-translations
+	url = https://github.com/byte-mate/bytemate-translations.git
