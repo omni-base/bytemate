@@ -90,7 +90,7 @@ async fn main() {
 
     let mut client = serenity::ClientBuilder::new(&config.token, serenity::GatewayIntents::all())
         .framework(framework)
-        .activity(poise::serenity_prelude::ActivityData::custom("If you could fly a plane to Pluto, the trip would take more than 800 years!"))
+        .activity(poise::serenity_prelude::ActivityData::custom("𝗠𝗘𝗢𝗪"))
         .data(Arc::new(Data {
             has_started: AtomicBool::new(false),
             db,
