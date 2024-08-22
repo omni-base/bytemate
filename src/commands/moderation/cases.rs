@@ -317,7 +317,11 @@ pub async fn view(
             "next" => current_page = (current_page + 1).min(pages - 1),
             _ => continue,
         }
-
+        if interaction.user.id != ctx.author().id {
+            interaction.create_response(ctx.http(), CreateInteractionResponse::Message(CreateInteractionResponseMessage::new().ephemeral(true).content("You can't interact with this message.").ephemeral(true))).await?;
+            continue;
+        }
+        
         let (content, components) = create_message(current_page);
         interaction.create_response(ctx.http(), CreateInteractionResponse::UpdateMessage(CreateInteractionResponseMessage::new().embed(content).components(components))).await?;
     }
