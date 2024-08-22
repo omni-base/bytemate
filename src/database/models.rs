@@ -26,7 +26,7 @@ pub struct ModerationSettings {
     pub warn_expire_time: Option<i64>,
 }
 
-#[derive(Queryable, Selectable, Insertable, Clone)]
+#[derive(Queryable, Selectable, Insertable, Clone, Debug)]
 #[diesel(table_name = crate::database::schema::cases)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct Cases {

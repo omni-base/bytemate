@@ -9,6 +9,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use axum::{Json, Router};
 use axum::routing::get;
 use diesel::{Connection, PgConnection};
+use diesel_async::{AsyncConnection, AsyncPgConnection};
 use dotenvy::dotenv;
 use poise::serenity_prelude as serenity;
 use poise::serenity_prelude::{CacheHttp, Command, UserId};
@@ -53,7 +54,7 @@ struct Config {
 
 pub struct Data {
     pub has_started: AtomicBool,
-    pub db: Arc<Mutex<PgConnection>>,
+    pub db: Arc<Mutex<AsyncPgConnection>>,
     pub global_commands: Arc<RwLock<Vec<Command>>>,
     pub client_id: Arc<RwLock<UserId>>,
 }
@@ -61,12 +62,17 @@ pub type BotError = Box<dyn std::error::Error + Send + Sync>;
 pub type Context<'a> = poise::Context<'a, Data, BotError>;
 
 
-pub fn establish_connection() -> PgConnection {
+pub async fn establish_connection() -> Result<AsyncPgConnection, Box<dyn std::error::Error>> {
     dotenv().ok();
-    
+
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-    PgConnection::establish(&database_url)
-        .unwrap_or_else(|_| panic!("Error connecting to {}", database_url))
+    match AsyncPgConnection::establish(&database_url).await {
+        Ok(conn) => Ok(conn),
+        Err(e) => {
+            eprintln!("Error connecting to {}: {}", database_url, e);
+            Err(Box::new(e))
+        }
+    }
 }
 
 
@@ -88,7 +94,8 @@ async fn main() {
         .build();
 
 
-    let connection = Arc::new(Mutex::new(establish_connection()));
+    let connection = establish_connection().await.expect("Failed to establish connection");
+    let connection = Arc::new(Mutex::new(connection));
     
     let mut client = serenity::ClientBuilder::new(&config.token, serenity::GatewayIntents::all())
         .framework(framework)

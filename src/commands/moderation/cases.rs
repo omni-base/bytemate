@@ -1,6 +1,7 @@
 
 use std::collections::{BTreeMap, HashMap};
-use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper};
+use diesel::{ExpressionMethods, QueryDsl,  SelectableHelper};
+use diesel_async::RunQueryDsl;
 use futures::future::join_all;
 use poise::CreateReply;
 use poise::serenity_prelude::{ButtonStyle,  CreateActionRow, CreateButton, CreateEmbed, CreateEmbedAuthor, CreateEmbedFooter, CreateInteractionResponse, CreateInteractionResponseMessage, Timestamp, User, UserId};
@@ -53,15 +54,16 @@ pub async fn view(
             .filter(guild_id.eq(guild))
             .filter(case_id.eq(case_res_id))
             .select(Cases::as_select())
-            .load::<Cases>(&mut *db_conn)
-            .unwrap();
+            .first::<Cases>(&mut *db_conn).await
+            .ok();
 
-        if case.is_empty() {
+        if case.is_none() {
             ctx.say("No case found with the given ID.").await?;
             return Ok(());
         }
 
-        let case = case.first().unwrap();
+        let case = case.unwrap();
+
 
         let before_user = UserId::new(u64::from(NonMaxU64::try_from(case.user_id as u64).unwrap()));
 
@@ -119,13 +121,15 @@ pub async fn view(
             .filter(guild_id.eq(guild))
             .filter(moderator_id.eq(moderator.id.get() as i64))
             .select(Cases::as_select())
-            .load::<Cases>(&mut *db_conn)
-            .unwrap();
+            .load::<Cases>(&mut *db_conn).await
+            .ok();
 
-        if cases_results.is_empty() {
+        if cases_results.is_none() {
             ctx.say(format!("No cases found for {}.", moderator.clone().global_name.unwrap())).await?;
             return Ok(());
         }
+
+        let cases_results = cases_results.unwrap();
 
         let mut result = String::new();
 
@@ -167,20 +171,22 @@ pub async fn view(
             .filter(guild_id.eq(guild))
             .filter(user_id.eq(user.get() as i64))
             .select(Cases::as_select())
-            .load::<Cases>(&mut *db_conn)
+            .load::<Cases>(&mut *db_conn).await
             .unwrap()
     } else {
         cases
             .filter(guild_id.eq(guild))
             .select(Cases::as_select())
-            .load::<Cases>(&mut *db_conn)
+            .load::<Cases>(&mut *db_conn).await
             .unwrap()
     };
 
+    println!("{:?}", cases_result);
     if cases_result.is_empty() {
         ctx.say("No cases found.").await?;
         return Ok(());
     }
+
 
     let mut grouped_cases: BTreeMap<i64, Vec<Cases>> = BTreeMap::new();
     let mut user_ids = Vec::new();
@@ -285,7 +291,10 @@ pub async fn view(
 
         let mut components = vec![];
         let previous_button = CreateButton::new("prev").style(ButtonStyle::Primary).emoji('⬅').disabled(page == 0);
-        let next_button = CreateButton::new("next").style(ButtonStyle::Primary).emoji('➡').disabled(page == pages - 1);
+        let next_button = CreateButton::new("next")
+            .style(ButtonStyle::Primary)
+            .emoji('➡')
+            .disabled(page >= pages - 1);
         let action_row = CreateActionRow::Buttons(vec![previous_button, next_button]);
         components.push(action_row);
 
@@ -321,12 +330,10 @@ pub async fn remove(
     #[description = "Case ID(s) to remove (e.g., 1 or 1,2,3,4)"] case_ids: String,
 ) -> Result<(), BotError> {
     use crate::database::schema::cases::dsl::*;
-    
+
     ctx.defer().await?;
     let guild = ctx.guild_id().unwrap().get();
     let data = ctx.data();
-    
-    let mut db_conn = data.db.lock().await;
 
     let case_ids: Vec<i32> = case_ids.split(',')
         .filter_map(|id_res| id_res.trim().parse().ok())
@@ -337,27 +344,27 @@ pub async fn remove(
         return Ok(());
     }
 
+    let mut db_conn = data.db.lock().await;
+
     let mut response = String::new();
     let mut removed_warns: Vec<(UserId, i32, i32)> = Vec::new();
 
-    for &case_res_id in &case_ids {
-        let case = cases
+    let all_cases = cases
             .filter(guild_id.eq(guild as i64))
-            .filter(case_id.eq(case_res_id))
+            .filter(case_id.eq_any(&case_ids))
             .select(Cases::as_select())
-            .load::<Cases>(&mut *db_conn)
-            .unwrap();
-        
-        if case.is_empty() {
-            response.push_str(&format!("Case {} not found.\n", case_res_id));
-            continue;
-        }
+            .load::<Cases>(&mut *db_conn).await
+            .unwrap_or_default();
 
-        let user = UserId::new(u64::from(NonMaxU64::try_from(case.first().unwrap().user_id as u64).unwrap()));
-        
-        let guild = ctx.guild_id().unwrap();
-        
-            match case.first().unwrap().case_type.as_str() {
+
+    let cases_map: HashMap<i32, Cases> = all_cases.into_iter().map(|c| (c.case_id, c)).collect();
+
+    for &case_res_id in &case_ids {
+        if let Some(case) = cases_map.get(&case_res_id) {
+            let user = UserId::new(u64::from(NonMaxU64::try_from(case.user_id as u64).unwrap()));
+            let guild = ctx.guild_id().unwrap();
+
+            match case.case_type.as_str() {
                 "MUTE" => {
                     let log_data = LogData {
                         ctx: Some(ctx.serenity_context()),
@@ -370,7 +377,6 @@ pub async fn remove(
                     };
 
                     log_action(LogType::Unmute, log_data).await?;
-
                     guild.member(ctx.http(), user).await?.enable_communication(ctx.http()).await?;
                 },
                 "BAN" => {
@@ -385,52 +391,56 @@ pub async fn remove(
                     };
 
                     log_action(LogType::Unban, log_data).await?;
-
                     guild.unban(ctx.http(), user, Some(&format!("Case {} removed", case_res_id))).await?;
                 },
                 "WARN" => {
-                    let points_res = case.first().unwrap().points.unwrap_or(1);
+                    let points_res = case.points.unwrap_or(1);
                     removed_warns.push((user, case_res_id, points_res));
                 },
                 _ => {}
             }
 
-            let _ = diesel::delete(
-                cases.filter(guild_id.eq(guild.get() as i64))
-                    .filter(case_id.eq(case_res_id))
-            ).execute(&mut *db_conn);
-        
-            
             response.push_str(&format!("Case {} removed for {}.\n", case_res_id, user.to_user(ctx.http()).await?.name));
+        } else {
+            response.push_str(&format!("Case {} not found.\n", case_res_id));
+        }
     }
-    
-    if !removed_warns.is_empty() && removed_warns.len() > 1 {
+
+    let _ = diesel::delete(
+        cases.filter(guild_id.eq(guild as i64))
+            .filter(case_id.eq_any(&case_ids))
+    ).execute(&mut *db_conn).await;
+
+    drop(db_conn);
+
+    if !removed_warns.is_empty() {
         let log_data = LogData {
             ctx: Some(ctx.serenity_context()),
             guild_id: Some(guild),
             moderator_id: Some(ctx.author().id),
             data: Some(&*data),
-            removed_warns: Some(removed_warns),
+            removed_warns: Some(removed_warns.clone()),
             ..LogData::default()
         };
 
-        log_action(LogType::RemoveMultipleWarns, log_data).await?;
-    } else if let Some((user, case_res_id, points_res)) = removed_warns.first() {
-        let log_data = LogData {
-            ctx: Some(ctx.serenity_context()),
-            guild_id: Some(guild),
-            user_id: Some(user.get()),
-            moderator_id: Some(ctx.author().id),
-            case_id: Some(*case_res_id),
-            data: Some(&*data),
-            points: Some(*points_res),
-            ..LogData::default()
-        };
-
-        log_action(LogType::RemoveWarn, log_data).await?;
+        if removed_warns.len() > 1 {
+            log_action(LogType::RemoveMultipleWarns, log_data).await?;
+        } else if let Some((user, case_res_id, action_points)) = removed_warns.get(0) {
+            let single_warn_log_data = LogData {
+                ctx: Some(ctx.serenity_context()),
+                guild_id: Some(guild),
+                user_id: Some(user.get()),
+                moderator_id: Some(ctx.author().id),
+                case_id: Some(*case_res_id),
+                data: Some(&*data),
+                points: Some(*action_points),
+                ..LogData::default()
+            };
+            log_action(LogType::RemoveWarn, single_warn_log_data).await?;
+        }
     }
-    
+
     ctx.say(response).await?;
-    
+
     Ok(())
 }

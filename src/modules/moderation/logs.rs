@@ -1,10 +1,10 @@
 use chrono::Utc;
-use diesel::ExpressionMethods;
+use diesel::{ExpressionMethods};
 use poise::serenity_prelude::{CacheHttp, ChannelId, Context, CreateEmbed, CreateEmbedAuthor, CreateEmbedFooter, CreateMessage, GuildId, Timestamp, UserId};
 use crate::{BotError, Data};
 use crate::database::models::*;
 use diesel::prelude::*;
-use tokio::sync::MutexGuard;
+use diesel_async::RunQueryDsl;
 use crate::database::schema::logs::dsl::logs;
 use crate::util::color::BotColors;
 
@@ -75,12 +75,11 @@ pub async fn log_action(log_type: LogType, log_data: LogData<'_>) -> Result<(), 
         }
     };
     
-    let log_results = logs
+    let log = logs
         .filter(guild_id.eq(log_data.guild_id.unwrap() as i64))
         .select(Logs::as_select())
-        .load(&mut *db_conn).unwrap()
-        ;
-    let log = log_results.first().unwrap();
+        .first::<Logs>(&mut *db_conn).await.unwrap();
+    
     let log_embed = create_log_embed(&log_type, &log_data).await;
 
     ChannelId::new(log.default_log_channel as u64)

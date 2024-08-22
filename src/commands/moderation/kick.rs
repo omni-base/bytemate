@@ -1,5 +1,5 @@
 use diesel::associations::HasTable;
-use diesel::RunQueryDsl;
+use diesel_async::RunQueryDsl;
 use poise::{command, CreateReply, send_reply};
 use poise::serenity_prelude::{Member};
 use crate::{BotError, Context};
@@ -61,7 +61,7 @@ pub async fn kick(
     
     let mut db_conn = data.db.lock().await;
     
-    let new_case_id = generate_case_id(&mut db_conn);
+    let new_case_id = generate_case_id(&mut db_conn).await;
 
     let new_case: Cases = Cases {
         guild_id: ctx.guild_id().unwrap().get() as i64,
@@ -78,6 +78,7 @@ pub async fn kick(
     diesel::insert_into(cases::table())
         .values(&new_case)
         .execute(&mut *db_conn)
+        .await
         .expect("Failed to insert case into database");
     
 

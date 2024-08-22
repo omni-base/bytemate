@@ -8,6 +8,7 @@ use crate::Data;
 
 use crate::database::models::*;
 use diesel::prelude::*;
+use diesel_async::{RunQueryDsl};
 use poise::serenity_prelude::nonmax::NonMaxU64;
 use crate::modules::moderation::logs::{log_action, LogData, LogType};
 
@@ -20,8 +21,11 @@ async fn unban_check(data: Arc<Data>, ctx: Arc<Context>, data_about_bot: Ready) 
         .filter(case_type.eq("BAN"))
         .filter(end_date.lt(now))
         .select(Cases::as_select())
-        .load::<Cases>(&mut *db_conn)
-        .unwrap();
+        .load::<Cases>(&mut *db_conn).await.unwrap();
+    
+
+    
+    
     
     for case in cases_results {
        let guild = GuildId::new(u64::from(NonMaxU64::try_from(case.guild_id as u64).unwrap()));
@@ -59,7 +63,7 @@ async fn remove_warn_check(data: Arc<Data>, ctx: Arc<Context>, data_about_bot: R
         .filter(end_date.lt(now))
         .select(Cases::as_select())
         .load::<Cases>(&mut *db_conn)
-        .unwrap();
+        .await.unwrap();
     
     
     

@@ -1,4 +1,5 @@
-use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
+use diesel::{ExpressionMethods, QueryDsl};
+use diesel_async::{RunQueryDsl};
 use diesel::dsl::sum;
 use diesel::row::NamedRow;
 use poise::{command, CreateReply};
@@ -58,7 +59,7 @@ pub async fn warn(
 
     let mut db_conn = data.db.lock().await;
 
-    let new_case_id = generate_case_id(&mut db_conn);
+    let new_case_id = generate_case_id(&mut db_conn).await;
 
     use crate::database::schema::cases::dsl::guild_id as cases_guild_id;
     use crate::database::schema::moderation_settings::dsl::guild_id as moderation_settings_guild_id;
@@ -66,7 +67,7 @@ pub async fn warn(
     let expire_time = match moderation_settings
         .filter(moderation_settings_guild_id.eq(guild.get() as i64))
         .select(warn_expire_time)
-        .first::<Option<i64>>(&mut *db_conn) {
+        .first::<Option<i64>>(&mut *db_conn).await {
         Ok(Some(time)) => time,
         Ok(None) => 3,
         Err(_) => {
@@ -98,14 +99,14 @@ pub async fn warn(
 
     diesel::insert_into(crate::database::schema::cases::table)
         .values(&new_case)
-        .execute(&mut *db_conn).unwrap();
+        .execute(&mut *db_conn).await.unwrap();
 
     let total_points = cases
         .filter(cases_guild_id.eq(guild.get() as i64))
         .filter(user_id.eq(user.user.id.get() as i64))
         .select(sum(points))
-        .first::<Option<i64>>(&mut *db_conn).unwrap().unwrap_or(action_points as i64);
-    
+        .first::<Option<i64>>(&mut *db_conn).await.unwrap().unwrap_or(action_points as i64);
+
     drop(db_conn);
 
     let mut e = CreateEmbed::new()
