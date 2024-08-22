@@ -453,7 +453,11 @@ pub async fn remove(
         }
     }
 
-    ctx.say(response).await?;
+    let e = CreateEmbed::new()
+        .color(BotColors::Default.color())
+        .description(response);
+    
+    ctx.send(CreateReply::new().embed(e)).await?;
 
     Ok(())
 }
