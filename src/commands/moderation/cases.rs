@@ -31,7 +31,7 @@ pub async fn view(
     let guild = ctx.guild_id().unwrap().get() as i64;
 
     let data = ctx.data();
-    
+
 
     if let Some(case_res_id) = case {
         if user.is_some() {
@@ -49,7 +49,7 @@ pub async fn view(
             return Ok(());
         }
 
-        
+
         let case = data.db.run(|conn| {
             cases
                 .filter(guild_id.eq(guild))
@@ -185,7 +185,7 @@ pub async fn view(
                 .load::<Cases>(conn)
         }).await?
     };
-    
+
     if cases_result.is_empty() {
         ctx.say("No cases found.").await?;
         return Ok(());
@@ -331,7 +331,7 @@ pub async fn view(
 #[poise::command(slash_command, guild_only)]
 pub async fn remove(
     ctx: Context<'_>,
-    #[description = "Case ID(s) to remove (e.g., 1 or 1,2,3,4)"] case_ids: String,
+    #[description = "Case ID(s) to remove e.g 1 or 1,2,3. Max 10"] case_ids: String,
 ) -> Result<(), BotError> {
     use crate::database::schema::cases::dsl::*;
 
@@ -348,6 +348,11 @@ pub async fn remove(
         return Ok(());
     }
     
+    if case_ids.len() > 10 {
+        ctx.say("You can only remove up to 10 cases at a time.").await?;
+        return Ok(());
+    }
+
 
     let mut response = String::new();
     let mut removed_warns: Vec<(UserId, i32, i32)> = Vec::new();

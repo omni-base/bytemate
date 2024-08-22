@@ -1,6 +1,9 @@
+use chrono::Utc;
 use poise::{command, CreateReply, send_reply};
 use poise::serenity_prelude::{Member};
 use crate::{BotError, Context};
+use diesel_async::RunQueryDsl;
+use diesel::prelude::*;
 use crate::modules::moderation::logs::{log_action, LogData, LogType};
 
 /// Remove a mute from a user
@@ -10,6 +13,8 @@ pub async fn unmute(
     #[description = "a user to unmute"]
     mut user: Member,
 ) -> Result<(), BotError> {
+    use crate::database::schema::cases::dsl::*;
+    
     if user.user.bot() {
         send_reply(ctx,
                    CreateReply::new().content("You can't unmute a bot").ephemeral(true)
@@ -24,7 +29,16 @@ pub async fn unmute(
         return Ok(());
     }
 
-    if user.communication_disabled_until.is_none() {
+    let is_muted = ctx.data().db.run(|conn| {
+        cases
+            .filter(user_id.eq(user.user.id.get() as i64))
+            .filter(case_type.eq("MUTE"))
+            .filter(end_date.gt(Utc::now()))
+            .select(case_id)
+            .first::<i32>(conn)
+    }).await.ok().is_some();
+    
+    if !is_muted {
         send_reply(ctx,
                    CreateReply::new().content("User is not muted").ephemeral(true)
         ).await?;

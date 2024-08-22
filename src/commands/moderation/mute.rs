@@ -1,8 +1,9 @@
 use chrono::{DateTime, Utc};
-use diesel::QueryDsl;
+
 use diesel_async::RunQueryDsl;
 use poise::{command, CreateReply, send_reply};
 use poise::serenity_prelude::{EditMember, Member};
+use diesel::prelude::*;
 use crate::{BotError, Context};
 use crate::database::models::Cases;
 use crate::modules::moderation::logs::{log_action, LogData, LogType};
@@ -48,7 +49,16 @@ pub async fn mute(
         return Ok(());
     }
 
-    if user.communication_disabled_until.is_some_and(|c| c.timestamp() > Utc::now().timestamp()) {
+    let is_muted = ctx.data().db.run(|conn| {
+        cases
+            .filter(user_id.eq(user.user.id.get() as i64))
+            .filter(case_type.eq("MUTE"))
+            .filter(end_date.gt(Utc::now()))
+            .select(case_id)
+            .first::<i32>(conn)
+    }).await.ok().is_some();
+
+    if  is_muted {
         send_reply(ctx, CreateReply::new().content("User is already muted").ephemeral(true)).await?;
         return Ok(());
     }
