@@ -55,7 +55,7 @@ fn create_log_channel_config_embed() -> CreateEmbed<'static> {
 fn create_log_channel_select_menu(logs_table: Logs) -> CreateActionRow<'static> {
     let select_menu = CreateSelectMenu::new("log_channel", CreateSelectMenuKind::Channel {
         channel_types: Some(Cow::Owned(vec![ChannelType::Text])),
-        default_channels: Some(Cow::Owned(vec![Some(logs_table.default_log_channel).map_or(ChannelId::default(), |id| ChannelId::new(id as u64))])),
+        default_channels: Some(Cow::Owned(vec![logs_table.default_log_channel.map(|id| ChannelId::new(id as u64)).unwrap_or(ChannelId::default())])),
     });
     CreateActionRow::SelectMenu(select_menu)
 }
@@ -140,7 +140,7 @@ fn get_modal_value(interaction: &ModalInteraction) -> Result<String, BotError> {
 async fn create_moderation_config_embed(moderation_table: ModerationSettings, logs_table: Logs) -> CreateEmbed<'static> {
     CreateEmbed::new()
         .title("Moderation Config")
-        .field("Log Channel", Some(logs_table.default_log_channel).map_or("None".to_string(), |id| format!("<#{}>", id)), false)
+        .field("Log Channel", Some(logs_table.default_log_channel.unwrap()).map_or("None".to_string(), |id| format!("<#{}>", id)), false)
         .field("Warn Expire Time", format!("{:?} days", moderation_table.warn_expire_time.unwrap()), false)
 }
 
@@ -204,7 +204,7 @@ async fn edit_log_channel(ctx: Context<'_>, interaction: ComponentInteraction) -
     if let Some(interaction) = await_interaction(&ctx, &interaction.message, "log_channel").await {
         let selected_channel = ChannelId::new(get_selected_value(&interaction)?.parse()?);
 
-        new_logs.default_log_channel = selected_channel.get() as i64;
+        new_logs.default_log_channel = Option::from(selected_channel.get() as i64);
 
         interaction.create_response(ctx.http(), CreateInteractionResponse::UpdateMessage(
             CreateInteractionResponseMessage::default()

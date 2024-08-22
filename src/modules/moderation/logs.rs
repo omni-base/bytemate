@@ -9,19 +9,20 @@ use crate::database::schema::logs::dsl::logs;
 use crate::util::color::BotColors;
 
 #[derive(Debug)]
+#[repr(u32)]
 pub enum LogType {
-    ClearMessages = 0,
-    ClearChannel = 1,
-    Mute = 2,
-    Unmute = 3,
-    Kick = 4,
-    Lock = 5,
-    Unlock = 6,
-    Ban = 7,
-    Unban = 8,
-    Warn = 9,
-    RemoveWarn = 10,
-    RemoveMultipleWarns = 11,
+    ClearMessages = 1 << 0,      // 00000001
+    ClearChannel = 1 << 1,       // 00000010
+    Mute = 1 << 2,               // 00000100
+    Unmute = 1 << 3,             // 00001000
+    Kick = 1 << 4,               // 00010000
+    Lock = 1 << 5,               // 00100000
+    Unlock = 1 << 6,             // 01000000
+    Ban = 1 << 7,                // 10000000
+    Unban = 1 << 8,              // 00000001 00000000
+    Warn = 1 << 9,               // 00000010 00000000
+    RemoveWarn = 1 << 10,        // 00000100 00000000
+    RemoveMultipleWarns = 1 << 11, // 00001000 00000000
 }
 
 #[derive(Default)]
@@ -77,8 +78,12 @@ pub async fn log_action(log_type: LogType, log_data: LogData<'_>) -> Result<(), 
     }).await?; 
     
     let log_embed = create_log_embed(&log_type, &log_data).await;
+    
+    if log.default_log_channel.is_none() {
+        return Ok(());
+    }
 
-    ChannelId::new(log.default_log_channel as u64)
+    ChannelId::new(log.default_log_channel.unwrap() as u64)
         .send_message(log_data.ctx.unwrap().http(), CreateMessage::new().embed(log_embed))
         .await?;
 
