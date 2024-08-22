@@ -22,3 +22,5 @@ config.yaml
 .sqlx
 migrations
 node_modules
+
+.env
