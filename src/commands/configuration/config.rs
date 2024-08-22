@@ -7,7 +7,6 @@ use poise::{command, CreateReply, Modal, send_reply};
 use poise::serenity_prelude::{ActionRowComponent, CacheHttp, ChannelId, ChannelType, ComponentInteraction, ComponentInteractionDataKind, CreateActionRow, CreateEmbed,  CreateInteractionResponse, CreateInteractionResponseMessage, CreateSelectMenu, CreateSelectMenuKind, CreateSelectMenuOption, InputText, Message, ModalInteraction};
 use poise::serenity_prelude::small_fixed_array::{FixedArray};
 use crate::database::models::{Logs, ModerationSettings};
-use crate::database::schema::logs::dsl::logs;
 
 const INTERACTION_TIMEOUT: Duration = Duration::from_secs(60);
 
@@ -151,19 +150,19 @@ async fn moderation_config(ctx: Context<'_>, interaction: ComponentInteraction) 
     use crate::database::schema::logs::dsl::*;
     use crate::database::schema::logs::dsl::guild_id as logs_guild_id;
     use crate::database::schema::moderation_settings::dsl::guild_id as moderation_guild_id;
-    
+
     let moderation_table = ctx.data().db.run(|conn| {
         moderation_settings
             .filter(moderation_guild_id.eq(ctx.guild_id().unwrap().get() as i64))
             .first::<ModerationSettings>(conn)
     }).await?;
-    
+
     let logs_table = ctx.data().db.run(|conn| {
         logs
             .filter(logs_guild_id.eq(ctx.guild_id().unwrap().get() as i64))
             .first::<Logs>(conn)
     }).await?;
-    
+
     interaction.create_response(ctx.http(), CreateInteractionResponse::UpdateMessage(
         CreateInteractionResponseMessage::default()
             .embed(create_moderation_config_embed(moderation_table.clone(), logs_table.clone()).await)
@@ -186,27 +185,27 @@ async fn moderation_config(ctx: Context<'_>, interaction: ComponentInteraction) 
 
 async fn edit_log_channel(ctx: Context<'_>, interaction: ComponentInteraction) -> Result<(), BotError> {
     use crate::database::schema::logs::dsl::*;
-    
+
     let logs_table = ctx.data().db.run(|conn| {
         logs
             .filter(guild_id.eq(ctx.guild_id().unwrap().get() as i64))
             .first::<Logs>(conn)
     }).await?;
-    
+
     interaction.create_response(ctx.http(), CreateInteractionResponse::UpdateMessage(
         CreateInteractionResponseMessage::default()
             .embed(create_log_channel_config_embed())
             .components(vec![create_log_channel_select_menu(logs_table.clone())])
     )).await?;
-    
-    
+
+
     let mut new_logs = logs_table.clone();
-    
+
     if let Some(interaction) = await_interaction(&ctx, &interaction.message, "log_channel").await {
         let selected_channel = ChannelId::new(get_selected_value(&interaction)?.parse()?);
 
         new_logs.default_log_channel = selected_channel.get() as i64;
-        
+
         interaction.create_response(ctx.http(), CreateInteractionResponse::UpdateMessage(
             CreateInteractionResponseMessage::default()
                 .embed(CreateEmbed::new()
@@ -220,8 +219,8 @@ async fn edit_log_channel(ctx: Context<'_>, interaction: ComponentInteraction) -
                 .set(default_log_channel.eq(new_logs.default_log_channel))
                 .execute(conn)
         }).await?;
-        
-        
+
+
         selected_channel.say(ctx.http(), "This channel has been set as the log channel").await?;
     }
 
@@ -273,7 +272,7 @@ async fn edit_warn_expire_time(ctx: Context<'_>, interaction: ComponentInteracti
                             .description(format!("Warn expire time set to {} days", custom_days)))
                         .components(vec![])
                 )).await?;
-                
+
                 custom_days
             } else {
                 return Ok(());
