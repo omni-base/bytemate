@@ -14,6 +14,7 @@ use dotenvy::dotenv;
 use poise::serenity_prelude as serenity;
 use poise::serenity_prelude::{CacheHttp, Command, UserId};
 use serde::{Deserialize, Serialize};
+use crate::commands::configuration::config;
 use crate::commands::utils::*;
 use crate::commands::moderation::*;
 use crate::database::manager::DbManager;
@@ -22,7 +23,7 @@ use crate::modules::moderation::notifications::notification_loop;
 pub mod database {
     pub mod schema;
     pub mod models;
-    
+
     pub mod manager;
 }
 
@@ -76,14 +77,15 @@ async fn main() {
                 ban::ban(), kick::kick(), mute::mute(), unmute::unmute(),
                 help::help(), cases::cases(), clear::clear(), channel::channel(),
                 warn::warn(),
+                config::config(),
             ],
             ..Default::default()
         })
         .build();
 
 
-    let db = Arc::new(DbManager::new(&config.database_url).await.unwrap()); 
-    
+    let db = Arc::new(DbManager::new(&config.database_url).await.unwrap());
+
     let mut client = serenity::ClientBuilder::new(&config.token, serenity::GatewayIntents::all())
         .framework(framework)
         .activity(poise::serenity_prelude::ActivityData::custom("If you could fly a plane to Pluto, the trip would take more than 800 years!"))
@@ -128,31 +130,35 @@ async fn event_handler(
     framework: poise::FrameworkContext<'_, Data, BotError>,
     event: &serenity::FullEvent,
 ) -> Result<(), BotError> {
-    if let serenity::FullEvent::Ready { data_about_bot, .. } = event {
-        let data = framework.user_data();
-        let ctx = Arc::new(framework.serenity_context.clone());
-        
-        if !data.has_started.load(Ordering::Relaxed) {
-            let commands = &framework.options().commands;
-            poise::builtins::register_globally(ctx.http(), commands).await?;
-            println!("Successfully registered slash commands!");
+    match event {
+        serenity::FullEvent::Ready { data_about_bot, .. } => {
+            let data = framework.user_data();
+            let ctx = Arc::new(framework.serenity_context.clone());
 
-            let global_commands = ctx.http().get_global_commands().await?;
-            *data.global_commands.write().unwrap() = global_commands;
+            if !data.has_started.load(Ordering::Relaxed) {
+                let commands = &framework.options().commands;
+                poise::builtins::register_globally(ctx.http(), commands).await?;
+                println!("Successfully registered slash commands!");
 
-            data.has_started.store(true, Ordering::Relaxed);
-            *data.client_id.write().unwrap() = data_about_bot.user.id;
-            println!("Logged in as {}", data_about_bot.user.name);
+                let global_commands = ctx.http().get_global_commands().await?;
+                *data.global_commands.write().unwrap() = global_commands;
 
-            let data_about_bot = data_about_bot.clone();
-            
-            tokio::spawn(async move { notification_loop(data.clone(), ctx, data_about_bot).await });
-        }
-    } else if let serenity::FullEvent::Message { new_message} = event {
-        
-        if new_message.content.contains(format!("<@{}>", framework.user_data().client_id.read().unwrap()).as_str()) {
-            new_message.reply(framework.serenity_context.http(), "Hello!").await?;
-        }
+                data.has_started.store(true, Ordering::Relaxed);
+                *data.client_id.write().unwrap() = data_about_bot.user.id;
+                println!("Logged in as {}", data_about_bot.user.name);
+
+                let data_about_bot = data_about_bot.clone();
+                let data_clone = data.clone();
+                tokio::spawn(async move { notification_loop(data_clone, ctx, data_about_bot).await });
+            }
+        },
+        serenity::FullEvent::Message { new_message } => {
+            let client_id = framework.user_data().client_id.read().unwrap().to_string();
+            if new_message.content.contains(&format!("<@{}>", client_id)) {
+                new_message.reply(framework.serenity_context.http(), "Hello!").await?;
+            }
+        },
+        _ => {}
     }
     Ok(())
 }
