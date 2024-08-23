@@ -44,6 +44,9 @@ pub mod modules {
     }
 }
 
+pub mod localization {
+    pub mod manager;
+}
 pub mod commands;
 
 

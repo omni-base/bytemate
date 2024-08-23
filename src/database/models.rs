@@ -6,6 +6,7 @@ use diesel::prelude::*;
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct GuildSettings {
     pub guild_id: i64,
+    pub lang: String,
 }
 
 #[derive(Queryable, Selectable, Insertable, Clone, Debug)]
