@@ -1,7 +1,6 @@
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::{RunQueryDsl};
 use diesel::dsl::sum;
-use diesel::row::NamedRow;
 use poise::{command, CreateReply};
 use poise::serenity_prelude::{CreateEmbed, Member, Timestamp};
 use crate::{BotError, Context};
@@ -54,7 +53,6 @@ pub async fn warn(
     let guild = ctx.guild_id().unwrap();
     let data = ctx.data();
     let action_points = action_points.unwrap_or(1);
-    let action_reason = action_reason;
 
     let new_case_id: i32 = data.db.run(|conn| {
         cases
