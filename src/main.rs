@@ -18,6 +18,7 @@ use crate::commands::configuration::config;
 use crate::commands::utils::*;
 use crate::commands::moderation::*;
 use crate::database::manager::DbManager;
+use crate::localization::manager::LocalizationManager;
 use crate::modules::moderation::notifications::notification_loop;
 
 pub mod database {
@@ -62,6 +63,7 @@ struct Config {
 pub struct Data {
     pub has_started: AtomicBool,
     pub db: Arc<DbManager>,
+    pub localization_manager: Arc<LocalizationManager>,
     pub global_commands: Arc<RwLock<Vec<Command>>>,
     pub client_id: Arc<RwLock<UserId>>,
 }
@@ -97,6 +99,7 @@ async fn main() {
         .data(Arc::new(Data {
             has_started: AtomicBool::new(false),
             db,
+            localization_manager: Arc::new(LocalizationManager::new("en".to_string()).await.unwrap()),
             global_commands: Arc::new(RwLock::new(Vec::new())),
             client_id: Arc::new(RwLock::new(UserId::default())),
         }) as _)

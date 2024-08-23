@@ -3,7 +3,7 @@ use std::path::Path;
 use std::time::Duration;
 use futures::stream::{self, StreamExt};
 use poise::{command, CreateReply, send_reply};
-use poise::serenity_prelude::{Channel, CreateAttachment, CreateChannel, CreateMessage, GetMessages, GuildChannel, Member, Role};
+use poise::serenity_prelude::{CreateAttachment, CreateChannel, CreateMessage, GetMessages, GuildChannel, Member, Role};
 use crate::{BotError, Context};
 use crate::modules::moderation::logs::{log_action, LogData, LogType};
 
