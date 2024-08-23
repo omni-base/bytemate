@@ -4,11 +4,10 @@ use crate::database::manager::DbManager;
 use diesel_async::RunQueryDsl;
 use diesel::prelude::*;
 use poise::serenity_prelude::GuildId;
-use crate::database::models::GuildSettings;
 
 pub async fn upsert_database(
     db: Arc<DbManager>,
-    guilds: &Vec<GuildId>
+    guilds: &[GuildId]
 ) -> Result<(), BotError> {
     
     upsert_guild_settings(db.clone(), guilds).await?;
