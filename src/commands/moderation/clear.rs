@@ -5,6 +5,7 @@ use futures::stream::{self, StreamExt};
 use poise::{command, CreateReply, send_reply};
 use poise::serenity_prelude::{CreateAttachment, CreateChannel, CreateMessage, GetMessages, GuildChannel, Member, Role};
 use crate::{BotError, Context};
+use crate::localization::manager::{TranslationParam, TranslationRef};
 use crate::modules::moderation::logs::{log_action, LogData, LogType};
 
 #[command(slash_command, default_member_permissions = "MANAGE_MESSAGES", subcommands("channel", "messages"), guild_only)]
@@ -27,8 +28,15 @@ pub async fn messages(
     #[description = "Filter by role messages"]
     role: Option<Role>,
 ) -> Result<(), BotError> {
+    let db = ctx.data().db.clone();
+    let locales = ctx.data().localization_manager.clone();
+    let lang = locales
+        .get_guild_language(db, ctx.guild_id().unwrap()).await.unwrap();
+
     let channel_id = ctx.channel_id();
-    let guild_id = ctx.guild_id().ok_or_else(|| BotError::from("Command must be used in a guild"))?;
+    let guild_id = ctx.guild_id().unwrap();
+
+
 
     let messages = channel_id.messages(&ctx.http(), GetMessages::new().limit(amount)).await?;
 
@@ -76,16 +84,83 @@ pub async fn messages(
     if !message_ids.is_empty() {
         channel_id.delete_messages(ctx.http(), &message_ids, None).await?;
 
-        let reply_content = format!(
-            "Successfully deleted {} message(s).{}{}",
-            message_ids.len(),
-            user.map_or(String::new(), |m| format!(" Filtered by user: {}.", m.user.name)),
-            role.map_or(String::new(), |r| format!(" Filtered by role: {}.", r.name))
-        );
+
+        let content = locales.get(
+            "commands.moderation.clear.messages_success_reply",
+            lang,
+            &[
+                &TranslationParam::from(message_ids.len().to_string()),
+                &TranslationParam::from(if message_ids.len() == 1 {
+                    TranslationRef::new(
+                        "commands.moderation.clear.messages_ending_one",
+                        vec![]
+                    )
+                } else {
+                    TranslationRef::new(
+                        "commands.moderation.clear.messages_ending_multiple",
+                        vec![]
+                    )
+                }),
+                &TranslationParam::from_option(user.map(|user| TranslationRef::new(
+                    "commands.moderation.clear.messages_filtered_by_user",
+                    vec![user.user.name.to_string()]
+                ))),
+                &TranslationParam::from_option(role.map(|role| TranslationRef::new(
+                    "commands.moderation.clear.messages_filtered_by_role",
+                    vec![role.name.to_string()]
+                ))),
+            ]
+        ).await;
+
+        // let content = locales.get_translation(
+        //     "commands.moderation.clear.messages_success_reply",
+        //     lang,
+        //     &[
+        //         Box::new(message_ids.len().to_string()) as Box<dyn Translatable + Send + Sync>,
+        //
+        //         if message_ids.len() == 1 {
+        //             Box::new(TranslationRef::new::<String>(
+        //                 "commands.moderation.clear.messages_ending_one",
+        //                 vec![]
+        //             )) as Box<dyn Translatable + Send + Sync>
+        //         } else {
+        //             Box::new(TranslationRef::new::<String>(
+        //                 "commands.moderation.clear.messages_ending_multiple",
+        //                 vec![]
+        //             )) as Box<dyn Translatable + Send + Sync>
+        //         },
+        //
+        //         if let Some(user) = user {
+        //             Box::new(TranslationRef::new::<String>(
+        //                 "commands.moderation.clear.messages_filtered_by_user",
+        //                 vec![user.user.name.to_string().parse().unwrap()]
+        //             )) as Box<dyn Translatable + Send + Sync>
+        //         } else {
+        //             Box::new(String::new()) as Box<dyn Translatable + Send + Sync>
+        //         },
+        //
+        //         if let Some(role) = role {
+        //             Box::new(TranslationRef::new::<String>(
+        //                 "commands.moderation.clear.messages_filtered_by_role",
+        //                 vec![role.name.to_string().parse().unwrap()]
+        //             )) as Box<dyn Translatable + Send + Sync>
+        //         } else {
+        //             Box::new(String::new()) as Box<dyn Translatable + Send + Sync>
+        //         },
+        //     ]
+        // ).await;
+
+
+
+
+
+
+
+
 
         send_reply(ctx,
                    CreateReply::new()
-                       .content(reply_content)
+                       .content(content)
                        .ephemeral(true)
         ).await?;
 
