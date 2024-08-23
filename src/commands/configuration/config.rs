@@ -7,7 +7,6 @@ use poise::{command, CreateReply, Modal, send_reply};
 use poise::serenity_prelude::{ActionRowComponent, CacheHttp, ChannelId, ChannelType, ComponentInteraction, ComponentInteractionDataKind, CreateActionRow, CreateEmbed,  CreateInteractionResponse, CreateInteractionResponseMessage, CreateSelectMenu, CreateSelectMenuKind, CreateSelectMenuOption, InputText, Message, ModalInteraction};
 use poise::serenity_prelude::small_fixed_array::{FixedArray};
 use crate::database::models::{Logs, ModerationSettings};
-use crate::database::schema::logs::log_types;
 use crate::modules::moderation::logs::{get_active_log_types, LogType};
 use crate::util::color::BotColors;
 
