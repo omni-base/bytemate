@@ -1,16 +1,13 @@
-#![feature(trivial_bounds)]
+
 #![feature(async_closure)]
 #![feature(duration_constructors)]
 
-use std::{env, fs};
+use std::{fs};
 use std::sync::{Arc, RwLock};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use axum::{Json, Router};
 use axum::routing::get;
-use diesel::{Connection, PgConnection};
-use diesel_async::{AsyncConnection, AsyncPgConnection};
-use dotenvy::dotenv;
 use poise::serenity_prelude as serenity;
 use poise::serenity_prelude::{CacheHttp, Command, UserId};
 use serde::{Deserialize, Serialize};
@@ -18,7 +15,7 @@ use crate::commands::configuration::config;
 use crate::commands::utils::*;
 use crate::commands::moderation::*;
 use crate::database::manager::DbManager;
-use crate::localization::manager::LocalizationManager;
+use crate::localization::manager::{Language, LocalizationManager};
 use crate::modules::moderation::notifications::notification_loop;
 
 pub mod database {
@@ -31,7 +28,6 @@ pub mod database {
 }
 
 pub mod util {
-    pub mod util;
     
     pub mod color;
     pub mod time;
@@ -99,7 +95,7 @@ async fn main() {
         .data(Arc::new(Data {
             has_started: AtomicBool::new(false),
             db,
-            localization_manager: Arc::new(LocalizationManager::new("en".to_string()).await.unwrap()),
+            localization_manager: Arc::new(LocalizationManager::new(Language::English).await.unwrap()),
             global_commands: Arc::new(RwLock::new(Vec::new())),
             client_id: Arc::new(RwLock::new(UserId::default())),
         }) as _)
@@ -149,7 +145,12 @@ async fn event_handler(
                 println!("Successfully registered slash commands!");
 
                 let global_commands = ctx.http().get_global_commands().await?;
-                *data.global_commands.write().unwrap() = global_commands;
+                    
+                {
+                    let mut global_commands_lock = data.global_commands.write().unwrap();
+                    *global_commands_lock = global_commands;
+                }
+                
 
                 data.has_started.store(true, Ordering::Relaxed);
                 *data.client_id.write().unwrap() = data_about_bot.user.id;
