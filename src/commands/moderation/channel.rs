@@ -20,6 +20,13 @@ pub async fn lock(
 ) -> Result<(), BotError> {
     let current_channel = ctx.guild_channel().await.unwrap();
 
+    let db = ctx.data().db.clone();
+    let locales = ctx.data().localization_manager.clone();
+    let guild_lang = locales
+        .get_guild_language(db, ctx.guild_id().unwrap()).await.unwrap();
+    
+    
+
     let mut channel = channel.unwrap_or(current_channel);
 
     let everyone = ctx.guild().unwrap().id.everyone_role().get();
@@ -28,10 +35,12 @@ pub async fn lock(
 
     if let Some(perms) = permissions.iter_mut().find(|p| p.kind == PermissionOverwriteType::Role(everyone.into())) {
         if perms.deny.contains(Permissions::SEND_MESSAGES) {
-            ctx.say("Channel is already locked").await?;
+            let error_msg = locales.get("commands.moderation.channel.error_already_locked", guild_lang, &[]).await;
+            ctx.say(error_msg).await?;
             return Ok(());
         } else {
-            ctx.say("Channel has been locked").await?;
+            let msg = locales.get("commands.moderation.channel.reply_locked", guild_lang, &[]).await;
+            ctx.say(msg).await?;
             perms.deny.insert(Permissions::SEND_MESSAGES);
             perms.deny.insert(Permissions::SEND_MESSAGES_IN_THREADS);
             perms.allow.remove(Permissions::SEND_MESSAGES);
@@ -43,12 +52,15 @@ pub async fn lock(
             allow: Permissions::empty(),
             deny: Permissions::SEND_MESSAGES | Permissions::SEND_MESSAGES_IN_THREADS,
          });
-        ctx.say("Channel has been locked").await?;
+        let msg = locales.get("commands.moderation.channel.reply_locked", guild_lang, &[]).await;
+        ctx.say(msg).await?;
     }
 
     channel.edit(ctx.http(), EditChannel::new().permissions(permissions)).await?;
     
     let data = ctx.data().clone();
+    
+    let no_reason = locales.get("commands.moderation.channel.no_reason", guild_lang, &[]).await;
     
     let log_data = LogData {
         data: Some(&*data),
@@ -56,7 +68,7 @@ pub async fn lock(
         guild_id: Some(ctx.guild_id().unwrap().get()),
         channel_id: Some(channel.id.get()),
         moderator_id: Some(ctx.author().id),
-        reason: reason.or(Option::from("No reason provided".to_string())),
+        reason: reason.or(Option::from(no_reason)),
         ..LogData::default()
     };
     
@@ -75,6 +87,11 @@ pub async fn unlock(
     #[description = "Reason for unlocking the channel"]
     reason: Option<String>
 ) -> Result<(), BotError> {
+    let db = ctx.data().db.clone();
+    let locales = ctx.data().localization_manager.clone();
+    let guild_lang = locales
+        .get_guild_language(db, ctx.guild_id().unwrap()).await.unwrap();
+    
     let current_channel = ctx.guild_channel().await.unwrap();
 
     let mut channel = channel.unwrap_or(current_channel);
@@ -85,23 +102,28 @@ pub async fn unlock(
 
     if let Some(perms) = permissions.iter_mut().find(|p| p.kind == PermissionOverwriteType::Role(everyone.into())) {
         if perms.deny.contains(Permissions::SEND_MESSAGES) {
-            ctx.say("Channel has been unlocked").await?;
+            let msg = locales.get("commands.moderation.channel.reply_unlocked", guild_lang, &[]).await;
+            ctx.say(msg).await?;
             perms.deny.remove(Permissions::SEND_MESSAGES);
             perms.allow.insert(Permissions::SEND_MESSAGES);
             perms.deny.remove(Permissions::SEND_MESSAGES_IN_THREADS);
             perms.allow.insert(Permissions::SEND_MESSAGES_IN_THREADS);
         } else {
-            ctx.say("Channel is already unlocked").await?;
+            let error_msg = locales.get("commands.moderation.channel.error_already_unlocked", guild_lang, &[]).await;
+            ctx.say(error_msg).await?;
             return Ok(());
         }
     } else {
-        ctx.say("Channel is already unlocked").await?;
+        let error_msg = locales.get("commands.moderation.channel.error_already_unlocked", guild_lang, &[]).await;
+        ctx.say(error_msg).await?;
         return Ok(());
     }
 
     channel.edit(ctx.http(), EditChannel::new().permissions(permissions)).await?;
 
     let data = ctx.data().clone();
+  
+    let no_reason = locales.get("commands.moderation.channel.no_reason", guild_lang, &[]).await;
     
     let log_data = LogData {
         data: Some(&*data),
@@ -109,7 +131,7 @@ pub async fn unlock(
         guild_id: Some(ctx.guild_id().unwrap().get()),
         channel_id: Some(channel.id.get()),
         moderator_id: Some(ctx.author().id),
-        reason: reason.or(Option::from("No reason provided".to_string())),
+        reason: reason.or(Option::from(no_reason)),
         ..LogData::default()
     };
     
