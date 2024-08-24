@@ -6,7 +6,7 @@ use crate::{BotError, Context};
 use poise::{command, CreateReply, Modal, send_reply};
 use poise::serenity_prelude::{ActionRowComponent, CacheHttp, ChannelId, ChannelType, ComponentInteraction, ComponentInteractionDataKind, CreateActionRow, CreateEmbed,  CreateInteractionResponse, CreateInteractionResponseMessage, CreateSelectMenu, CreateSelectMenuKind, CreateSelectMenuOption, InputText, Message, ModalInteraction};
 use poise::serenity_prelude::small_fixed_array::{FixedArray};
-use crate::database::models::{Logs, ModerationSettings};
+use crate::database::models::{GuildSettings, Logs, ModerationSettings};
 use crate::modules::moderation::logs::{get_active_log_types, LogType};
 use crate::util::color::BotColors;
 
@@ -15,12 +15,14 @@ const INTERACTION_TIMEOUT: Duration = Duration::from_secs(60);
 /// See or modify the current bot configuration
 #[command(slash_command, default_member_permissions = "ADMINISTRATOR", guild_only)]
 pub async fn config(ctx: Context<'_>) -> Result<(), BotError> {
-    let reply = send_reply(ctx, CreateReply::new().embed(create_config_embed()).components(vec![create_select_menu("config_module", vec![("Moderation", "moderation")])])).await?;
+    let reply = send_reply(ctx, CreateReply::new().embed(create_config_embed()).components(vec![create_select_menu("config_module", vec![("Core", "core"),("Moderation", "moderation")])])).await?;
     let message = reply.message().await?;
 
     if let Some(interaction) = await_interaction(&ctx, &message, "config_module").await {
-        if get_selected_value(&interaction)? == "moderation" {
-            moderation_config(ctx, interaction).await?
+        match get_selected_value(&interaction)?.as_str() {
+            "core" => core_config(ctx, interaction).await?,
+            "moderation" => moderation_config(ctx, interaction).await?,
+            _ => {}
         }
     }
 
@@ -40,9 +42,9 @@ fn create_select_menu<'a>(custom_id: &'a str, options: Vec<(&'a str, &'a str)>) 
 fn create_config_embed() -> CreateEmbed<'static> {
     CreateEmbed::new()
         .title("Configuration")
-        .description("Select a module to configure")
+        .description("Select a module to configure: \n\n **Core**, **Moderation**")
         .color(BotColors::Default.color())
-        .field("Modules", "Moderation", false)
+
 }
 
 
@@ -193,6 +195,88 @@ async fn moderation_config(ctx: Context<'_>, interaction: ComponentInteraction) 
             "warn_expire_time" => edit_warn_expire_time(ctx, interaction).await?,
             _ => {}
         }
+    }
+
+    Ok(())
+}
+
+async fn create_core_config_embed(guild_table: GuildSettings) -> CreateEmbed<'static> {
+    CreateEmbed::new()
+        .title("Core Config")
+        .color(BotColors::Default.color())
+        .field("Bot Language", guild_table.lang, false)
+}
+
+async fn core_config(ctx: Context<'_>, interaction: ComponentInteraction) -> Result<(), BotError> {
+    use crate::database::schema::guild_settings::dsl::*;
+
+    let guild_table = ctx.data().db.run(|conn| {
+        guild_settings
+            .filter(guild_id.eq(ctx.guild_id().unwrap().get() as i64))
+            .first::<GuildSettings>(conn)
+    }).await?;
+
+    interaction.create_response(ctx.http(), CreateInteractionResponse::UpdateMessage(
+        CreateInteractionResponseMessage::default()
+            .embed(create_core_config_embed(guild_table.clone()).await)
+            .components(vec![create_select_menu("core_config", vec![
+                ("Bot Language", "bot_language"),
+            ])])
+    )).await?;
+
+    if let Some(interaction) = await_interaction(&ctx, &interaction.message, "core_config").await {
+        if get_selected_value(&interaction)?.as_str() == "bot_language" { edit_bot_language(ctx, interaction).await? }
+    }
+
+
+    Ok(())
+}
+
+fn create_bot_language_select_menu(guild_table: GuildSettings) -> CreateActionRow<'static> {
+    let select_menu = CreateSelectMenu::new("bot_language", CreateSelectMenuKind::String {
+        options: Cow::Owned(vec![
+            CreateSelectMenuOption::new("English", "en").default_selection(guild_table.lang == "en"),
+            CreateSelectMenuOption::new("Polish", "pl").default_selection(guild_table.lang == "pl"),
+        ])
+    });
+    CreateActionRow::SelectMenu(select_menu)
+}
+
+
+async fn edit_bot_language(ctx: Context<'_>, interaction: ComponentInteraction) -> Result<(), BotError> {
+    use crate::database::schema::guild_settings::dsl::*;
+
+    
+    let guild_table = ctx.data().db.run(|conn| {
+        guild_settings
+            .filter(guild_id.eq(ctx.guild_id().unwrap().get() as i64))
+            .first::<GuildSettings>(conn)
+    }).await?;
+
+    interaction.create_response(ctx.http(), CreateInteractionResponse::UpdateMessage(
+        CreateInteractionResponseMessage::default()
+            .embed(create_log_channel_config_embed())
+            .components(vec![create_bot_language_select_menu(guild_table.clone())])
+    )).await?;
+    
+    if let Some(interaction) = await_interaction(&ctx, &interaction.message, "bot_language").await {
+        let selected_lang = get_selected_value(&interaction)?;
+        let selected_lang_clone = selected_lang.clone();
+        
+        ctx.data().db.run(move |conn| {
+            diesel::update(guild_settings.filter(guild_id.eq(ctx.guild_id().unwrap().get() as i64)))
+                .set(lang.eq(selected_lang))
+                .execute(conn)
+        }).await?;
+        
+        interaction.create_response(ctx.http(), CreateInteractionResponse::UpdateMessage(
+            CreateInteractionResponseMessage::default()
+                .embed(CreateEmbed::new()
+                    .title("Bot Language Set")
+                    .description(format!("Bot language set to: {}", selected_lang_clone))
+                )
+                .components(vec![])
+        )).await?;
     }
 
     Ok(())
