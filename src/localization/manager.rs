@@ -143,7 +143,7 @@ impl LocalizationManager {
                         format!("{}.{}", prefix, path.file_stem().unwrap().to_str().unwrap())
                     };
                     let content = fs::read_to_string(&path)?;
-                    let yaml: serde_yaml::Value = serde_yaml::from_str(&content)?;
+                    let yaml: Value = serde_yaml::from_str(&content)?;
                     self.flatten_yaml(&yaml, &file_prefix, translations);
                 }
             }
@@ -164,66 +164,62 @@ impl LocalizationManager {
                     self.flatten_yaml(value, &new_prefix, result);
                 }
             }
-            serde_yaml::Value::String(s) => {
+            Value::String(s) => {
                 result.insert(prefix.to_string(), s.clone());
             }
             _ => {}
         }
     }
 
-    pub async fn get<'a, T>(
-        &self,
-        key: &str,
+    pub fn get<'a>(
+        &'a self,
+        key: &'a str,
         lang: Language,
-        params: &[T],
-    ) -> String
-    where
-        T: AsRef<TranslationParam> + Send + Sync,
-    {
-        let translations = self.translations.read().await;
-        let lang_translations = translations.get(&lang).or_else(|| translations.get(&self.default_lang));
+        params: &'a [TranslationParam],
+    ) -> Pin<Box<dyn Future<Output = String> + Send + 'a>> {
+        Box::pin(async move {
+            let translations = self.translations.read().await;
+            let lang_translations = translations.get(&lang).or_else(|| translations.get(&self.default_lang));
 
-        match lang_translations {
-            Some(lt) => {
-                let template = lt.get(key).cloned().unwrap_or_else(|| key.to_string());
-                self.format_translation(template, params, lang).await
+            match lang_translations {
+                Some(lt) => {
+                    let template = lt.get(key).cloned().unwrap_or_else(|| key.to_string());
+                    self.format_translation(template, params, lang).await
+                }
+                None => key.to_string(),
             }
-            None => key.to_string(),
-        }
+        })
     }
 
-
-
-
-
-    async fn format_translation<'a, T>(
-        &self,
+    fn format_translation<'a>(
+        &'a self,
         template: String,
-        params: &[T],
+        params: &'a [TranslationParam],
         lang: Language,
-    ) -> String
-    where
-        T: AsRef<TranslationParam> + Send + Sync,
-    {
-        let re = Regex::new(r"\{(\d+)}").unwrap();
-        let mut result = template;
-
-        let captures: Vec<_> = re.captures_iter(&result).collect();
-        let mut result_clone = result.clone();
-        for cap in captures {
-            if let (Some(whole), Some(index_str)) = (cap.get(0), cap.get(1)) {
-                if let Ok(index) = index_str.as_str().parse::<usize>() {
-                    if index < params.len() {
-                        let replacement = self.resolve_param(params[index].as_ref(), lang).await;
-                        result_clone = result_clone.replace(whole.as_str(), &replacement);
+    ) -> Pin<Box<dyn Future<Output = String> + Send + 'a>> {
+        Box::pin(async move {
+            let re = Regex::new(r"\{(\d+)}").unwrap();
+            let mut result = template;
+            let captures: Vec<_> = re.captures_iter(&result).collect();
+            
+            let mut result_clone = result.clone();
+            for cap in captures {
+                if let (Some(whole), Some(index_str)) = (cap.get(0), cap.get(1)) {
+                    if let Ok(index) = index_str.as_str().parse::<usize>() {
+                        if index < params.len() {
+                            let replacement = self.resolve_param(&params[index], lang).await;
+                            result_clone = result_clone.replace(whole.as_str(), &replacement);
+                        } else {
+                            println!("Index {} out of range for params", index);
+                        }
                     }
                 }
             }
-        }
-        result = result_clone;
-
-        result
+            result = result_clone;
+            result
+        })
     }
+
 
     fn resolve_param<'a>(
         &'a self,
@@ -241,6 +237,7 @@ impl LocalizationManager {
             }
         })
     }
+
 
 
     pub async fn get_guild_language(&self, db: Arc<DbManager>, id: GuildId) -> Result<Language, ()> {
