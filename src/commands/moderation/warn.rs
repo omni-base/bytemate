@@ -6,6 +6,7 @@ use poise::serenity_prelude::{CreateEmbed, Member, Timestamp};
 use crate::{BotError, Context};
 use crate::database::models::Cases;
 use crate::database::schema::moderation_settings::dsl::moderation_settings;
+use crate::localization::manager::TranslationParam;
 use crate::modules::moderation::logs::{log_action, LogData, LogType};
 use crate::util::color::BotColors;
 use crate::util::timestamp::{Format, TimestampExt};
@@ -21,23 +22,32 @@ pub async fn warn(
     use crate::database::schema::cases::dsl::*;
     use crate::database::schema::moderation_settings::*;
 
+    let db = ctx.data().db.clone();
+    let locales = ctx.data().localization_manager.clone();
+    let guild_lang = locales
+        .get_guild_language(db, ctx.guild_id().unwrap()).await.unwrap();
+    
     if user.user.bot() {
-        ctx.reply("You can't warn a bot").await?;
+        let error_msg = locales.get("commands.moderation.warn.error_user_bot", guild_lang, &[]).await;
+        ctx.reply(error_msg).await?;
         return Ok(());
     }
 
     if user.user.id == ctx.author().id {
-        ctx.reply("You can't warn yourself").await?;
+        let error_msg = locales.get("commands.moderation.warn.error_user_self", guild_lang, &[]).await;
+        ctx.reply(error_msg).await?;
         return Ok(());
     }
     let guild = ctx.guild().unwrap().clone();
     if guild.owner_id == user.user.id.get() {
-        ctx.reply("You can't warn the owner of the server").await?;
+        let error_msg = locales.get("commands.moderation.warn.error_user_owner", guild_lang, &[]).await;
+        ctx.reply(error_msg).await?;
         return Ok(());
     }
 
     if user.permissions(ctx.cache()).unwrap().administrator() {
-        ctx.reply("You can't warn an administrator").await?;
+        let error_msg = locales.get("commands.moderation.warn.error_user_admin", guild_lang, &[]).await;
+        ctx.reply(error_msg).await?;
         return Ok(());
     }
 
@@ -45,7 +55,8 @@ pub async fn warn(
         let author_highest_role_position = guild.member_highest_role(&ctx.author_member().await.unwrap()).map(|r| r.position).unwrap_or(0);
         let user_highest_role_position = guild.member_highest_role(&user).map(|r| r.position).unwrap_or(0);
         if user_highest_role_position >= author_highest_role_position {
-            ctx.reply("You can't warn a user with the same/higher role than you").await?;
+            let error_msg = locales.get("commands.moderation.warn.error_user_higher", guild_lang, &[]).await;
+            ctx.reply(error_msg).await?;
             return Ok(());
         }
     }
@@ -106,15 +117,32 @@ pub async fn warn(
             .first::<Option<i64>>(conn)
     }).await.unwrap_or(Option::from(action_points as i64));
 
+    let points_text = if action_points == 1 {
+        locales.get("commands.moderation.warn.point", guild_lang, &[]).await
+    } else {
+        locales.get("commands.moderation.warn.points", guild_lang, &[]).await
+    };
+    
+    let title = locales.get("commands.moderation.reply_success_title", guild_lang, &[
+        TranslationParam::from(action_points.to_string()),
+        TranslationParam::from(points_text)
+    ]).await;
+    
+    let field_user = locales.get("commands.moderation.reply_success_field_user", guild_lang, &[]).await;
+    let field_mod = locales.get("commands.moderation.reply_success_field_mod", guild_lang, &[]).await;
+    let field_total = locales.get("commands.moderation.reply_success_field_total", guild_lang, &[]).await;
+    let field_expires = locales.get("commands.moderation.reply_success_field_expires", guild_lang, &[]).await;
+    
+    
     let mut e = CreateEmbed::new()
-        .title(format!("A warning of {} point{} has been issued", action_points, if action_points == 1 { "" } else { "s" }))
+        .title(title)
         .color(BotColors::Default.color())
-        .field("User", format!("<@{}>", user.user.id), true)
-        .field("Moderator", format!("<@{}>", ctx.author().id), true)
-        .field("Total Points", total_points.unwrap().to_string(), true);
+        .field(field_user, format!("<@{}>", user.user.id), true)
+        .field(field_mod, format!("<@{}>", ctx.author().id), true)
+        .field(field_total, total_points.unwrap().to_string(), true);
 
     if let Some(end_res_date) = end_res_date {
-        e = e.field("Expires", Timestamp::from(end_res_date).to_discord_timestamp(Format::LongDateShortTime), true);
+        e = e.field(field_expires, Timestamp::from(end_res_date).to_discord_timestamp(Format::LongDateShortTime), true);
     }
 
     ctx.send(CreateReply::new().embed(e)).await?;
