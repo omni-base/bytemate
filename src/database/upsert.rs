@@ -9,7 +9,8 @@ pub async fn upsert_database(
     db: Arc<DbManager>,
     guilds: &[GuildId]
 ) -> Result<(), BotError> {
-    
+
+
     upsert_guild_settings(db.clone(), guilds).await?;
     
     upsert_moderation_settings(db.clone(), guilds).await?;
@@ -26,7 +27,7 @@ async fn upsert_guild_settings(
     use crate::database::schema::guild_settings::dsl::*;
 
     let new_guild_settings: Vec<_> = guilds.iter().map(|guild| {
-        guild_id.eq(guild.get() as i64)
+        (guild_id.eq(guild.get() as i64), lang.eq("en"))
     }).collect::<Vec<_>>();
     
     db.run(|conn| {
