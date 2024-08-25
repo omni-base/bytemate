@@ -123,15 +123,15 @@ pub async fn warn(
         locales.get("commands.moderation.warn.points", guild_lang, &[]).await
     };
     
-    let title = locales.get("commands.moderation.reply_success_title", guild_lang, &[
+    let title = locales.get("commands.moderation.warn.reply_success_title", guild_lang, &[
         TranslationParam::from(action_points.to_string()),
         TranslationParam::from(points_text)
     ]).await;
     
-    let field_user = locales.get("commands.moderation.reply_success_field_user", guild_lang, &[]).await;
-    let field_mod = locales.get("commands.moderation.reply_success_field_mod", guild_lang, &[]).await;
-    let field_total = locales.get("commands.moderation.reply_success_field_total", guild_lang, &[]).await;
-    let field_expires = locales.get("commands.moderation.reply_success_field_expires", guild_lang, &[]).await;
+    let field_user = locales.get("commands.moderation.warn.reply_success_field_user", guild_lang, &[]).await;
+    let field_mod = locales.get("commands.moderation.warn.reply_success_field_mod", guild_lang, &[]).await;
+    let field_total = locales.get("commands.moderation.warn.reply_success_field_total", guild_lang, &[]).await;
+    let field_expires = locales.get("commands.moderation.warn.reply_success_field_expires", guild_lang, &[]).await;
     
     
     let mut e = CreateEmbed::new()
