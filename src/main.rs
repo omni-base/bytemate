@@ -32,6 +32,8 @@ pub mod util {
     pub mod color;
     pub mod time;
     pub mod timestamp;
+
+    pub mod interaction;
 }
 
 pub mod modules {
