@@ -27,6 +27,14 @@ impl Language {
             Language::Polish => "pl",
         }
     }
+    
+    pub fn from_str(s: &str) -> Result<Self, ()> {
+        match s {
+            "en" => Ok(Language::English),
+            "pl" => Ok(Language::Polish),
+            _ => Err(()),
+        }
+    }
 }
 
 impl FromStr for Language {
@@ -270,6 +278,14 @@ impl LocalizationManager {
         }).await?;
 
         Ok(())
+    }
+    
+    pub async fn get_translated_lang_name(&self, lang: Language) -> String {
+        let key = match lang {
+            Language::English => "languages.en",
+            Language::Polish => "languages.pl",
+        };
+        self.get(key, lang, &[]).await
     }
 }
 
