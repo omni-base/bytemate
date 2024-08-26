@@ -97,7 +97,7 @@ async fn main() {
         .data(Arc::new(Data {
             has_started: AtomicBool::new(false),
             db,
-            localization_manager: Arc::new(LocalizationManager::new(Language::English).await.unwrap()),
+            localization_manager: Arc::new(LocalizationManager::new(Language::English).unwrap()),
             global_commands: Arc::new(RwLock::new(Vec::new())),
             client_id: Arc::new(RwLock::new(UserId::default())),
         }) as _)

@@ -6,7 +6,7 @@ use crate::{BotError, Data};
 use crate::database::models::*;
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
-use crate::database::schema::logs::dsl::logs;
+use crate::localization::manager::{Language, LocalizationManager};
 use crate::util::color::BotColors;
 
 #[derive(Debug, Clone, Copy)]
@@ -27,20 +27,20 @@ pub enum LogType {
 }
 
 impl LogType {
-    pub fn to_string(&self) -> &'static str {
+    pub fn to_string(&self, manager: &LocalizationManager, lang: Language) -> String {
         match self {
-            LogType::ClearMessages => "Clear Messages",
-            LogType::ClearChannel => "Clear Channel",
-            LogType::Mute => "Mute",
-            LogType::Unmute => "Unmute",
-            LogType::Kick => "Kick",
-            LogType::Lock => "Lock",
-            LogType::Unlock => "Unlock",
-            LogType::Ban => "Ban",
-            LogType::Unban => "Unban",
-            LogType::Warn => "Warn",
-            LogType::RemoveWarn => "Remove Warn",
-            LogType::RemoveMultipleWarns => "Remove Multiple Warns",
+            LogType::ClearMessages => manager.get("commands.configuration.moderation.actions.clear_messages", lang, &[]),
+            LogType::ClearChannel => manager.get("commands.configuration.moderation.actions.clear_channel", lang, &[]),
+            LogType::Mute => manager.get("commands.configuration.moderation.actions.mute", lang, &[]),
+            LogType::Unmute => manager.get("commands.configuration.moderation.actions.unmute", lang, &[]),
+            LogType::Kick => manager.get("commands.configuration.moderation.actions.kick", lang, &[]),
+            LogType::Lock => manager.get("commands.configuration.moderation.actions.lock", lang, &[]),
+            LogType::Unlock => manager.get("commands.configuration.moderation.actions.unlock", lang, &[]),
+            LogType::Ban => manager.get("commands.configuration.moderation.actions.ban", lang, &[]),
+            LogType::Unban => manager.get("commands.configuration.moderation.actions.unban", lang, &[]),
+            LogType::Warn => manager.get("commands.configuration.moderation.actions.warn", lang, &[]),
+            LogType::RemoveWarn => manager.get("commands.configuration.moderation.actions.remove_warn", lang, &[]),
+            LogType::RemoveMultipleWarns => manager.get("commands.configuration.moderation.actions.remove_multiple_warns", lang, &[]),
         }
     }
     pub fn as_bit(&self) -> u32 {
@@ -48,9 +48,9 @@ impl LogType {
     }
 }
 
-pub fn get_active_log_types(mask: u32) -> Vec<&'static str> {
-    let mut active_types = Vec::new();
-
+pub fn get_active_log_types(mask: u32, manager: &LocalizationManager, lang: Language) -> Vec<String> {
+    let mut active_types: Vec<String> = Vec::new();
+    
     for &log_type in &[
         LogType::ClearMessages,
         LogType::ClearChannel,
@@ -66,10 +66,10 @@ pub fn get_active_log_types(mask: u32) -> Vec<&'static str> {
         LogType::RemoveMultipleWarns,
     ] {
         if mask & log_type.as_bit() != 0 {
-            active_types.push(log_type.to_string());
+            active_types.push(log_type.to_string(manager, lang));
         }
     }
-
+    
     active_types
 }
 
@@ -120,14 +120,14 @@ impl BitAnd<LogType> for i32 {
 }
 
 pub async fn log_action(log_type: LogType, log_data: LogData<'_>) -> Result<(), BotError> {
-    use crate::database::schema::logs::*;
+    use crate::database::schema::moderation_settings::dsl::*;
     let data = log_data.data.unwrap();
     
     let log = data.db.run(|conn| {
-        logs
+        moderation_settings
             .filter(guild_id.eq(log_data.guild_id.unwrap() as i64))
-            .select(Logs::as_select())
-            .first::<Logs>(conn)
+            .select(ModerationSettings::as_select())
+            .first::<ModerationSettings>(conn)
     }).await?;
     
     let log_embed = create_log_embed(&log_type, &log_data).await;

@@ -46,23 +46,17 @@ pub async fn view(
     if let Some(case_res_id) = case {
 
         if user.is_some() {
-            let error_msg = locales.get("commands.moderation.cases.view_error_user_and_id", guild_lang, &[]).await;
-
-            ctx.say(error_msg).await?;
+            ctx.say(locales.get("commands.moderation.cases.view_error_user_and_id", guild_lang, &[])).await?;
             return Ok(());
         }
 
         if case_res_type.is_some() {
-            let error_msg = locales.get("commands.moderation.cases.view_error_id_and_type", guild_lang, &[]).await;
-
-            ctx.say(error_msg).await?;
+            ctx.say(locales.get("commands.moderation.cases.view_error_id_and_type", guild_lang, &[])).await?;
             return Ok(());
         }
 
         if case_res_moderator.is_some() {
-            let error_msg = locales.get("commands.moderation.cases.view_error_id_and_mod", guild_lang, &[]).await;
-
-            ctx.say(error_msg).await?;
+            ctx.say(locales.get("commands.moderation.cases.view_error_id_and_mod", guild_lang, &[])).await?;
             return Ok(());
         }
 
@@ -76,9 +70,7 @@ pub async fn view(
         }).await.ok();
 
         if case.is_none() {
-            let error_msg = locales.get("commands.moderation.cases.view_error_no_case", guild_lang, &[]).await;
-
-            ctx.say(error_msg).await?;
+            ctx.say(locales.get("commands.moderation.cases.view_error_no_case", guild_lang, &[])).await?;
             return Ok(());
         }
 
@@ -91,18 +83,15 @@ pub async fn view(
 
         let user = before_user.to_user(ctx.http()).await?;
 
-        let points_trans = locales.get("commands.moderation.cases.view_points", guild_lang, &[]).await;
-
         let points_info = if case.case_type == "WARN" {
-            format!("`{}:` {}", points_trans, case.points.unwrap_or(0))
+            format!("`{}:` {}", locales.get("commands.moderation.cases.view_points", guild_lang, &[]), case.points.unwrap_or(0))
         } else {
             String::new()
         };
 
-        let no_reason = locales.get("commands.moderation.cases.no_reason", guild_lang, &[]).await;
-        let never_trans = locales.get("commands.moderation.cases.never", guild_lang, &[]).await;
 
-        let action_reason = case.reason.clone().unwrap_or_else(|| no_reason.to_string());
+
+        let action_reason = case.reason.clone().unwrap_or_else(|| locales.get("commands.moderation.cases.no_reason", guild_lang, &[]));
 
         let case_trans = locales.get("commands.moderation.cases.view_case", guild_lang, &[
             TranslationParam::from(case.case_id.to_string()),
@@ -113,12 +102,11 @@ pub async fn view(
             TranslationParam::from(action_reason),
             TranslationParam::from(points_info),
             TranslationParam::from(case.created_at.timestamp().to_string()),
-            TranslationParam::from(case.end_date.map_or(never_trans.to_string(), |dt| {
+            TranslationParam::from(case.end_date.map_or(locales.get("commands.moderation.cases.never", guild_lang, &[]), |dt| {
                 Timestamp::from(dt).to_discord_timestamp(Format::LongDateShortTime)
             })),
-        ]).await;
+        ]);
 
-        println!("{:?}", case_trans);
 
         let embed = CreateEmbed::new().color(BotColors::Default.color())
             .author(CreateEmbedAuthor::new(format!("Case Info for {}", user.clone().global_name.unwrap_or_else(|| user.name.clone())))
@@ -131,20 +119,17 @@ pub async fn view(
 
     if let Some(moderator_res) = case_res_moderator {
         if user.is_some() {
-            let error_msg = locales.get("commands.moderation.cases.view_error_user_and_mod", guild_lang, &[]).await;
-            ctx.say(error_msg).await?;
+            ctx.say(locales.get("commands.moderation.cases.view_error_user_and_mod", guild_lang, &[])).await?;
             return Ok(());
         }
 
         if case_res_type.is_some() {
-            let error_msg = locales.get("commands.moderation.cases.view_error_mod_and_type", guild_lang, &[]).await;
-            ctx.say(error_msg).await?;
+            ctx.say(locales.get("commands.moderation.cases.view_error_mod_and_type", guild_lang, &[])).await?;
             return Ok(());
         }
 
         if case.is_some() {
-            let error_msg = locales.get("commands.moderation.cases.view_error_id_and_mod", guild_lang, &[]).await;
-            ctx.say(error_msg).await?;
+            ctx.say(locales.get("commands.moderation.cases.view_error_id_and_mod", guild_lang, &[])).await?;
             return Ok(());
         }
 
@@ -159,10 +144,9 @@ pub async fn view(
         }).await.ok();
 
         if cases_results.is_none() {
-            let error_msg = locales.get("commands.moderation.cases.view_error_no_cases_mod", guild_lang, &[
+            ctx.say(locales.get("commands.moderation.cases.view_error_no_cases_mod", guild_lang, &[
                 TranslationParam::from(moderator.clone().global_name.unwrap())
-            ]).await;
-            ctx.say(error_msg).await?;
+            ])).await?;
             return Ok(());
         }
 
@@ -170,21 +154,20 @@ pub async fn view(
 
         let mut result = String::new();
 
-        let points_trans = locales.get("commands.moderation.cases.view_points", guild_lang, &[]).await;
+
 
         for case in cases_results {
             let user = UserId::new(u64::from(NonMaxU64::try_from(case.user_id as u64).unwrap()));
             let points_info = if case.case_type == "WARN" {
-                format!("`{}:` {}", points_trans, case.points.unwrap_or(0))
+                format!("`{}:` {}", locales.get("commands.moderation.cases.view_points", guild_lang, &[]), case.points.unwrap_or(0))
             } else {
                 String::new()
             };
 
-            let no_reason = locales.get("commands.moderation.cases.no_reason", guild_lang, &[]).await;
 
-            let never = locales.get("commands.moderation.cases.never", guild_lang, &[]).await;
 
-            let action_reason = case.reason.clone().unwrap_or_else(|| no_reason.to_string());
+
+            let action_reason = case.reason.clone().unwrap_or_else(|| locales.get("commands.moderation.cases.no_reason", guild_lang, &[]));
 
             let case_trans = locales.get("commands.moderation.cases.view_case", guild_lang, &[
                 TranslationParam::from(case.case_id.to_string()),
@@ -195,20 +178,19 @@ pub async fn view(
                 TranslationParam::from(action_reason),
                 TranslationParam::from(points_info),
                 TranslationParam::from(case.created_at.timestamp().to_string()),
-                TranslationParam::from(case.end_date.map_or(never.to_string(), |dt| {
+                TranslationParam::from(case.end_date.map_or(locales.get("commands.moderation.cases.never", guild_lang, &[]), |dt| {
                     Timestamp::from(dt).to_discord_timestamp(Format::LongDateShortTime)
                 })),
-            ]).await;
+            ]);
 
             result += &*case_trans;
         }
 
-        let view_user_cases = locales.get("commands.moderation.cases.view_user_cases", guild_lang, &[
-            TranslationParam::from(moderator.clone().global_name.unwrap())
-        ]).await;
 
         let embed = CreateEmbed::new().color(BotColors::Default.color())
-            .author(CreateEmbedAuthor::new(view_user_cases)
+            .author(CreateEmbedAuthor::new(locales.get("commands.moderation.cases.view_user_cases", guild_lang, &[
+                TranslationParam::from(moderator.clone().global_name.unwrap())
+            ]))
                 .icon_url(moderator.avatar_url().unwrap_or_default()))
             .description(result);
 
@@ -236,9 +218,7 @@ pub async fn view(
     };
 
     if cases_result.is_empty() {
-        let error_msg = locales.get("commands.moderation.cases.view_error_no_cases", guild_lang, &[]).await;
-
-        ctx.say(error_msg).await?;
+        ctx.say(locales.get("commands.moderation.cases.view_error_no_cases", guild_lang, &[])).await?;
         return Ok(());
     }
 
@@ -302,7 +282,7 @@ pub async fn view(
             if count >= start && count < end {
                 let user_cases = locales.get("commands.moderation.cases.view_user_cases", guild_lang, &[
                     TranslationParam::from(user_name.clone())
-                ]).await;
+                ]);
 
                 result += &format!("**{}**\n", user_cases);
             }
@@ -312,17 +292,13 @@ pub async fn view(
                     let moderator = UserId::new(u64::from(NonMaxU64::try_from(case.moderator_id as u64).unwrap()));
                     let _moderator_name = moderator_info.get(&moderator).cloned().unwrap_or_else(|| moderator.to_string().parse().unwrap());
 
-                    let points_trans = locales.get("commands.moderation.cases.view_points", guild_lang, &[]).await;
-                    let no_reason = locales.get("commands.moderation.cases.no_reason", guild_lang, &[]).await;
-
                     let points_info = if case.case_type == "WARN" {
-                        format!("`{}:` {}", points_trans, case.points.unwrap_or(1))
+                        format!("`{}:` {}", locales.get("commands.moderation.cases.view_points", guild_lang, &[]), case.points.unwrap_or(1))
                     } else {
                         String::new()
                     };
 
-                    let never = locales.get("commands.moderation.cases.never", guild_lang, &[]).await;
-                    let action_reason = case.reason.clone().unwrap_or_else(|| no_reason.to_string());
+                    let action_reason = case.reason.clone().unwrap_or_else(|| locales.get("commands.moderation.cases.no_reason", guild_lang, &[]));
 
                     let case_trans = locales.get("commands.moderation.cases.view_case", guild_lang, &[
                         TranslationParam::from(case.case_id.to_string()),
@@ -333,10 +309,10 @@ pub async fn view(
                         TranslationParam::from(action_reason),
                         TranslationParam::from(points_info),
                         TranslationParam::from(case.created_at.timestamp().to_string()),
-                        TranslationParam::from(case.end_date.map_or(never.to_string(), |dt| {
+                        TranslationParam::from(case.end_date.map_or(locales.get("commands.moderation.cases.never", guild_lang, &[]), |dt| {
                             Timestamp::from(dt).to_discord_timestamp(Format::LongDateShortTime)
                         })),
-                    ]).await;
+                    ]);
 
                     result += &*case_trans;
                 }
@@ -352,19 +328,16 @@ pub async fn view(
 
         cases_embed = cases_embed.description(result);
         if let Some(ref user) = user {
-            let cases_for = locales.get("commands.moderation.cases.view_cases_for", guild_lang, &[
+            cases_embed = cases_embed.author(CreateEmbedAuthor::new(locales.get("commands.moderation.cases.view_cases_for", guild_lang, &[
                 TranslationParam::from(user.name.clone())
-            ]).await;
-            cases_embed = cases_embed.author(CreateEmbedAuthor::new(cases_for));
+            ])));
         } else {
-            let cases_for = locales.get("commands.moderation.cases.view_cases_for_guild", guild_lang, &[]).await;
-            cases_embed = cases_embed.author(CreateEmbedAuthor::new(cases_for).icon_url(ctx.guild().unwrap().icon_url().unwrap_or_default()));
+            cases_embed = cases_embed.author(CreateEmbedAuthor::new(locales.get("commands.moderation.cases.view_cases_for_guild", guild_lang, &[])).icon_url(ctx.guild().unwrap().icon_url().unwrap_or_default()));
         }
-        let page_trans = locales.get("commands.moderation.cases.view_case_page", guild_lang, &[
+        cases_embed = cases_embed.footer(CreateEmbedFooter::new(locales.get("commands.moderation.cases.view_case_page", guild_lang, &[
             TranslationParam::from((page + 1).to_string()),
             TranslationParam::from(pages.to_string())
-        ]).await;
-        cases_embed = cases_embed.footer(CreateEmbedFooter::new(page_trans));
+        ])));
 
         let mut components = vec![];
         let previous_button = CreateButton::new("prev").style(ButtonStyle::Primary).emoji('⬅').disabled(page == 0);

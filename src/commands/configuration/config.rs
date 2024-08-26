@@ -10,6 +10,7 @@ use crate::util::color::BotColors;
 use crate::util::interaction::{await_interaction, create_select_menu, get_selected_value};
 
 mod core;
+mod moderation;
 
 
 /// See or modify the current bot configuration
@@ -20,22 +21,18 @@ pub async fn config(ctx: Context<'_>) -> Result<(), BotError> {
     let guild_lang = locales
         .get_guild_language(db, ctx.guild_id().unwrap()).await.unwrap();
 
-    let placeholder = locales.get("commands.configuration.config.placeholder.module", guild_lang, &[]).await;
-    let core = locales.get("commands.configuration.config.core", guild_lang, &[]).await;
-    let moderation = locales.get("commands.configuration.config.moderation", guild_lang, &[]).await;
-
-    let embed_title = locales.get("commands.configuration.config.embed_title", guild_lang, &[]).await;
+    let embed_title = locales.get("commands.configuration.config.embed_title", guild_lang, &[]);
     let embed_description = locales.get("commands.configuration.config.embed_description", guild_lang, &[
-        TranslationParam::from(core.clone()),
-        TranslationParam::from(moderation.clone())
-    ]).await;
+        TranslationParam::from(locales.get("commands.configuration.config.core", guild_lang, &[])),
+        TranslationParam::from(locales.get("commands.configuration.config.moderation", guild_lang, &[]))
+    ]);
 
     let reply = send_reply(ctx, CreateReply::new()
         .embed(create_config_embed(embed_title, embed_description))
         .components(vec![create_select_menu("config_module", vec![
-            (&*core, "core"),
-            (&*moderation, "moderation")
-        ], placeholder.as_str())])
+            (&*locales.get("commands.configuration.config.core", guild_lang, &[]), "core"),
+            (&*locales.get("commands.configuration.config.moderation", guild_lang, &[]), "moderation")
+        ], &*locales.get("commands.configuration.config.placeholder.module", guild_lang, &[]))])
     ).await?;
 
     let message = reply.message().await?;
@@ -43,7 +40,7 @@ pub async fn config(ctx: Context<'_>) -> Result<(), BotError> {
     if let Some(interaction) = await_interaction(&ctx, &message, "config_module").await {
         match get_selected_value(&interaction)?.as_str() {
             "core" => core::handle_core_config(ctx, interaction).await?,
-            // "moderation" => moderation::handle_moderation_config(ctx, interaction).await?,
+            "moderation" => moderation::handle_moderation_config(ctx, interaction).await?,
             _ => {}
         }
     }

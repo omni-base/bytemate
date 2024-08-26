@@ -110,7 +110,7 @@ pub async fn messages(
                     vec![role.name.to_string()]
                 ))),
             ]
-        ).await;
+        );
         
         send_reply(ctx,
                    CreateReply::new()
@@ -146,7 +146,7 @@ pub async fn messages(
                     vec![role.name.to_string()]
                 ))),
             ]
-        ).await;
+        );
         
         send_reply(ctx,
                    CreateReply::new()

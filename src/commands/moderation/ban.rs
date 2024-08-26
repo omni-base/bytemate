@@ -1,4 +1,3 @@
-use std::fmt::format;
 use diesel::prelude::*;
 use chrono::{DateTime, Utc};
 use diesel::associations::HasTable;
@@ -7,8 +6,7 @@ use poise::{command, CreateReply, send_reply};
 use poise::serenity_prelude::{Member};
 use crate::{BotError, Context};
 use crate::database::models::Cases;
-use crate::database::schema::guild_settings::lang;
-use crate::localization::manager::{TranslationParam, TranslationRef};
+use crate::localization::manager::{TranslationParam};
 use crate::modules::moderation::logs::{log_action, LogData, LogType};
 
 use crate::util::time::parse_to_time;
@@ -35,38 +33,29 @@ pub async fn ban(
         .get_guild_language(db, ctx.guild_id().unwrap()).await.unwrap();
     
     if user.user.bot() {
-        let error_msg = locales.get("commands.moderation.ban.error_user_bot", guild_lang, &[]).await;
-        
-        
         send_reply(ctx,
-                   CreateReply::new().content(error_msg).ephemeral(true)
+                   CreateReply::new().content(locales.get("commands.moderation.ban.error_user_bot", guild_lang, &[])).ephemeral(true)
         ).await?;
         return Ok(());
     }
     if user.user.id == ctx.author().id {
-        let error_msg = locales.get("commands.moderation.ban.error_user_self", guild_lang, &[]).await;
-        
         send_reply(ctx,
-                   CreateReply::new().content(error_msg).ephemeral(true)
+                   CreateReply::new().content(locales.get("commands.moderation.ban.error_user_self", guild_lang, &[])).ephemeral(true)
         ).await?;
         return Ok(());
     }
 
     let guild = ctx.guild().unwrap().clone();
     if guild.owner_id == user.user.id {
-        let error_msg = locales.get("commands.moderation.ban.error_user_owner", guild_lang, &[]).await;
-        
         send_reply(ctx,
-                   CreateReply::new().content(error_msg).ephemeral(true)
+                   CreateReply::new().content(locales.get("commands.moderation.ban.error_user_owner", guild_lang, &[])).ephemeral(true)
         ).await?;
         return Ok(());
     }
 
     if user.permissions(ctx.cache()).unwrap().administrator() {
-        let error_msg = locales.get("commands.moderation.ban.error_user_admin", guild_lang, &[]).await;
-        
         send_reply(ctx,
-                   CreateReply::new().content(error_msg).ephemeral(true)
+                   CreateReply::new().content(locales.get("commands.moderation.ban.error_user_admin", guild_lang, &[])).ephemeral(true)
         ).await?;
         return Ok(());
     }
@@ -78,28 +67,22 @@ pub async fn ban(
     let bot_highest_role_position = guild.member_highest_role(&guild.id.member(ctx.http(), ctx.http().get_current_user().await.unwrap().id).await.unwrap()).map(|r| r.position).unwrap_or(0);
 
     if user_highest_role_position >= bot_highest_role_position {
-        let error_msg = locales.get("commands.moderation.ban.error_user_higher_role", guild_lang, &[]).await;
-        
         send_reply(ctx,
-                   CreateReply::new().content(error_msg).ephemeral(true)
+                   CreateReply::new().content(locales.get("commands.moderation.ban.error_user_higher_role", guild_lang, &[])).ephemeral(true)
         ).await?;
         return Ok(());
     }
 
     if guild.owner_id != ctx.author().id && author_highest_role_position <= user_highest_role_position {
-        let error_msg = locales.get("commands.moderation.ban.error_user_higher_role", guild_lang, &[]).await;
-        
         send_reply(ctx,
-                   CreateReply::new().content(error_msg).ephemeral(true)
+                   CreateReply::new().content(locales.get("commands.moderation.ban.error_user_higher_role", guild_lang, &[])).ephemeral(true)
         ).await?;
         return Ok(());
     }
 
     if parse_to_time(duration.clone().unwrap()).lt(&60.into()) {
-        let error_msg = locales.get("commands.moderation.ban.error_time_too_less", guild_lang, &[]).await;
-        
         send_reply(ctx,
-                   CreateReply::new().content(error_msg).ephemeral(true)
+                   CreateReply::new().content(locales.get("commands.moderation.ban.error_time_too_less", guild_lang, &[])).ephemeral(true)
         ).await?;
         return Ok(());
     }
@@ -150,7 +133,7 @@ pub async fn ban(
             "commands.moderation.ban.permanently",
             guild_lang,
             &[]
-        ).await
+        )
     };
     
     let action_reason = if let Some(action_reason) = action_reason.clone() {
@@ -160,22 +143,20 @@ pub async fn ban(
             "commands.moderation.ban.no_reason",
             guild_lang,
             &[]
-        ).await
+        )
     };
     
-
-    let content = locales.get(
-        "commands.moderation.ban.messages_success_reply",
-        guild_lang,
-        &[
-            TranslationParam::from(user.user.tag().to_string()),
-            TranslationParam::from(duration_text),
-            TranslationParam::from(action_reason.clone()),
-        ]
-    ).await;
     
     send_reply(ctx,
-               CreateReply::new().content(content).ephemeral(true)
+       CreateReply::new().content(locales.get(
+           "commands.moderation.ban.messages_success_reply",
+           guild_lang,
+           &[
+               TranslationParam::from(user.user.tag().to_string()),
+               TranslationParam::from(duration_text),
+               TranslationParam::from(action_reason.clone()),
+           ]
+       )).ephemeral(true)
     ).await?;
     
     let data = ctx.data().clone();

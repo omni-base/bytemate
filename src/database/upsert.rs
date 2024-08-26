@@ -14,9 +14,7 @@ pub async fn upsert_database(
     upsert_guild_settings(db.clone(), guilds).await?;
     
     upsert_moderation_settings(db.clone(), guilds).await?;
-    
-    upsert_logs(db.clone(), guilds).await?;
-    
+
     Ok(())
 }
 
@@ -50,7 +48,9 @@ async fn upsert_moderation_settings(
     let new_moderation_settings: Vec<_> = guilds.iter().map(|guild| {
         (
             guild_id.eq(guild.get() as i64),
-            warn_expire_time.eq(3)
+            warn_expire_time.eq(3),
+            log_types.eq(4095),
+            default_log_channel.eq::<Option<i64>>(None),
         )
     }).collect::<Vec<_>>();
 
@@ -65,27 +65,3 @@ async fn upsert_moderation_settings(
     Ok(())
 }
 
-async fn upsert_logs(
-    db: Arc<DbManager>,
-    guilds: &[GuildId]
-) -> Result<(), BotError> {
-    use crate::database::schema::logs::dsl::*;
-
-    let new_logs: Vec<_> = guilds.iter().map(|guild| {
-        (
-            guild_id.eq(guild.get() as i64),
-            log_types.eq(4095),
-            default_log_channel.eq::<Option<i64>>(None)
-        )
-    }).collect::<Vec<_>>();
-
-    db.run(|conn| {
-        diesel::insert_into(logs)
-            .values(&new_logs)
-            .on_conflict(guild_id)
-            .do_nothing()
-            .execute(conn)
-    }).await.unwrap();
-
-    Ok(())
-}

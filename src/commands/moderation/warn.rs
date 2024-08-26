@@ -28,26 +28,22 @@ pub async fn warn(
         .get_guild_language(db, ctx.guild_id().unwrap()).await.unwrap();
     
     if user.user.bot() {
-        let error_msg = locales.get("commands.moderation.warn.error_user_bot", guild_lang, &[]).await;
-        ctx.reply(error_msg).await?;
+        ctx.reply(locales.get("commands.moderation.warn.error_user_bot", guild_lang, &[])).await?;
         return Ok(());
     }
 
     if user.user.id == ctx.author().id {
-        let error_msg = locales.get("commands.moderation.warn.error_user_self", guild_lang, &[]).await;
-        ctx.reply(error_msg).await?;
+        ctx.reply(locales.get("commands.moderation.warn.error_user_self", guild_lang, &[])).await?;
         return Ok(());
     }
     let guild = ctx.guild().unwrap().clone();
     if guild.owner_id == user.user.id.get() {
-        let error_msg = locales.get("commands.moderation.warn.error_user_owner", guild_lang, &[]).await;
-        ctx.reply(error_msg).await?;
+        ctx.reply(locales.get("commands.moderation.warn.error_user_owner", guild_lang, &[])).await?;
         return Ok(());
     }
 
     if user.permissions(ctx.cache()).unwrap().administrator() {
-        let error_msg = locales.get("commands.moderation.warn.error_user_admin", guild_lang, &[]).await;
-        ctx.reply(error_msg).await?;
+        ctx.reply(locales.get("commands.moderation.warn.error_user_admin", guild_lang, &[])).await?;
         return Ok(());
     }
 
@@ -55,8 +51,7 @@ pub async fn warn(
         let author_highest_role_position = guild.member_highest_role(&ctx.author_member().await.unwrap()).map(|r| r.position).unwrap_or(0);
         let user_highest_role_position = guild.member_highest_role(&user).map(|r| r.position).unwrap_or(0);
         if user_highest_role_position >= author_highest_role_position {
-            let error_msg = locales.get("commands.moderation.warn.error_user_higher", guild_lang, &[]).await;
-            ctx.reply(error_msg).await?;
+            ctx.reply(locales.get("commands.moderation.warn.error_user_higher", guild_lang, &[])).await?;
             return Ok(());
         }
     }
@@ -118,31 +113,27 @@ pub async fn warn(
     }).await.unwrap_or(Option::from(action_points as i64));
 
     let points_text = if action_points == 1 {
-        locales.get("commands.moderation.warn.point", guild_lang, &[]).await
+        locales.get("commands.moderation.warn.point", guild_lang, &[])
     } else {
-        locales.get("commands.moderation.warn.points", guild_lang, &[]).await
+        locales.get("commands.moderation.warn.points", guild_lang, &[])
     };
     
     let title = locales.get("commands.moderation.warn.reply_success_title", guild_lang, &[
         TranslationParam::from(action_points.to_string()),
         TranslationParam::from(points_text)
-    ]).await;
+    ]);
     
-    let field_user = locales.get("commands.moderation.warn.reply_success_field_user", guild_lang, &[]).await;
-    let field_mod = locales.get("commands.moderation.warn.reply_success_field_mod", guild_lang, &[]).await;
-    let field_total = locales.get("commands.moderation.warn.reply_success_field_total", guild_lang, &[]).await;
-    let field_expires = locales.get("commands.moderation.warn.reply_success_field_expires", guild_lang, &[]).await;
     
     
     let mut e = CreateEmbed::new()
         .title(title)
         .color(BotColors::Default.color())
-        .field(field_user, format!("<@{}>", user.user.id), true)
-        .field(field_mod, format!("<@{}>", ctx.author().id), true)
-        .field(field_total, total_points.unwrap().to_string(), true);
+        .field(locales.get("commands.moderation.warn.reply_success_field_user", guild_lang, &[]), format!("<@{}>", user.user.id), true)
+        .field(locales.get("commands.moderation.warn.reply_success_field_mod", guild_lang, &[]), format!("<@{}>", ctx.author().id), true)
+        .field(locales.get("commands.moderation.warn.reply_success_field_total", guild_lang, &[]), total_points.unwrap().to_string(), true);
 
     if let Some(end_res_date) = end_res_date {
-        e = e.field(field_expires, Timestamp::from(end_res_date).to_discord_timestamp(Format::LongDateShortTime), true);
+        e = e.field(locales.get("commands.moderation.warn.reply_success_field_expires", guild_lang, &[]), Timestamp::from(end_res_date).to_discord_timestamp(Format::LongDateShortTime), true);
     }
 
     ctx.send(CreateReply::new().embed(e)).await?;

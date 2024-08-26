@@ -1,14 +1,12 @@
-
 use std::collections::HashMap;
-use std::{fs};
+use std::fs;
 use std::path::{Path, PathBuf};
-use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::Arc;
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use poise::serenity_prelude::GuildId;
-use tokio::sync::RwLock;
+use parking_lot::RwLock;
 use regex::Regex;
 use serde_yaml::Value;
 use crate::database::manager::DbManager;
@@ -27,7 +25,7 @@ impl Language {
             Language::Polish => "pl",
         }
     }
-    
+
     pub fn from_str(s: &str) -> Result<Self, ()> {
         match s {
             "en" => Ok(Language::English),
@@ -50,7 +48,7 @@ impl FromStr for Language {
 }
 
 pub struct LocalizationManager {
-    translations: RwLock<HashMap<Language, HashMap<String, String>>>,
+    translations: Arc<RwLock<HashMap<Language, HashMap<String, String>>>>,
     default_lang: Language,
 }
 
@@ -70,34 +68,28 @@ impl TranslationRef {
     }
 }
 
-impl AsRef<TranslationParam> for TranslationParam {
-    fn as_ref(&self) -> &TranslationParam {
-        self
-    }
-}
-
 impl LocalizationManager {
-    pub async fn new(default_lang: Language) -> Result<Self, Box<dyn std::error::Error>> {
-        let mut manager = LocalizationManager {
-            translations: RwLock::new(HashMap::new()),
+    pub fn new(default_lang: Language) -> Result<Self, Box<dyn std::error::Error>> {
+        let manager = LocalizationManager {
+            translations: Arc::new(RwLock::new(HashMap::new())),
             default_lang,
         };
-        manager.load_translations().await?;
+        manager.load_translations()?;
         Ok(manager)
     }
 
-    async fn load_translations(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    fn load_translations(&self) -> Result<(), Box<dyn std::error::Error>> {
         let resources_dir = Path::new("bytemate-translations/resource");
         let mut translations = HashMap::new();
 
         let lang_dirs = self.find_language_dirs(resources_dir)?;
 
         for (lang, lang_dir) in lang_dirs {
-            let lang_translations = self.load_language_translations(&lang_dir).await?;
+            let lang_translations = self.load_language_translations(&lang_dir)?;
             translations.insert(lang, lang_translations);
         }
 
-        let mut lock = self.translations.write().await;
+        let mut lock = self.translations.write();
         *lock = translations;
         Ok(())
     }
@@ -119,44 +111,42 @@ impl LocalizationManager {
         Ok(lang_dirs)
     }
 
-    async fn load_language_translations(&self, lang_dir: &Path) -> Result<HashMap<String, String>, Box<dyn std::error::Error>> {
+    fn load_language_translations(&self, lang_dir: &Path) -> Result<HashMap<String, String>, Box<dyn std::error::Error>> {
         let mut translations = HashMap::new();
 
-        self.load_translations_recursive(lang_dir, &mut translations, String::new()).await?;
+        self.load_translations_recursive(lang_dir, &mut translations, String::new())?;
 
         Ok(translations)
     }
 
-    fn load_translations_recursive<'a>(
-        &'a self,
-        dir: &'a Path,
-        translations: &'a mut HashMap<String, String>,
+    fn load_translations_recursive(
+        &self,
+        dir: &Path,
+        translations: &mut HashMap<String, String>,
         prefix: String,
-    ) -> Pin<Box<dyn Future<Output = Result<(), Box<dyn std::error::Error>>> + Send + 'a>> {
-        Box::pin(async move {
-            for entry in fs::read_dir(dir)? {
-                let entry = entry?;
-                let path = entry.path();
-                if path.is_dir() {
-                    let new_prefix = if prefix.is_empty() {
-                        path.file_name().unwrap().to_str().unwrap().to_string()
-                    } else {
-                        format!("{}.{}", prefix, path.file_name().unwrap().to_str().unwrap())
-                    };
-                    self.load_translations_recursive(&path, translations, new_prefix).await?;
-                } else if path.is_file() && path.extension().unwrap_or_default() == "yaml" {
-                    let file_prefix = if prefix.is_empty() {
-                        path.file_stem().unwrap().to_str().unwrap().to_string()
-                    } else {
-                        format!("{}.{}", prefix, path.file_stem().unwrap().to_str().unwrap())
-                    };
-                    let content = fs::read_to_string(&path)?;
-                    let yaml: Value = serde_yaml::from_str(&content)?;
-                    self.flatten_yaml(&yaml, &file_prefix, translations);
-                }
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        for entry in fs::read_dir(dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.is_dir() {
+                let new_prefix = if prefix.is_empty() {
+                    path.file_name().unwrap().to_str().unwrap().to_string()
+                } else {
+                    format!("{}.{}", prefix, path.file_name().unwrap().to_str().unwrap())
+                };
+                self.load_translations_recursive(&path, translations, new_prefix)?;
+            } else if path.is_file() && path.extension().unwrap_or_default() == "yaml" {
+                let file_prefix = if prefix.is_empty() {
+                    path.file_stem().unwrap().to_str().unwrap().to_string()
+                } else {
+                    format!("{}.{}", prefix, path.file_stem().unwrap().to_str().unwrap())
+                };
+                let content = fs::read_to_string(&path)?;
+                let yaml: Value = serde_yaml::from_str(&content)?;
+                self.flatten_yaml(&yaml, &file_prefix, translations);
             }
-            Ok(())
-        })
+        }
+        Ok(())
     }
 
     fn flatten_yaml(&self, yaml: &Value, prefix: &str, result: &mut HashMap<String, String>) {
@@ -179,74 +169,46 @@ impl LocalizationManager {
         }
     }
 
-    pub fn get<'a>(
-        &'a self,
-        key: &'a str,
-        lang: Language,
-        params: &'a [TranslationParam],
-    ) -> Pin<Box<dyn Future<Output = String> + Send + 'a>> {
-        Box::pin(async move {
-            let translations = self.translations.read().await;
-            let lang_translations = translations.get(&lang).or_else(|| translations.get(&self.default_lang));
+    pub fn get(&self, key: &str, lang: Language, params: &[TranslationParam]) -> String {
+        let translations = self.translations.read();
+        let lang_translations = translations.get(&lang).or_else(|| translations.get(&self.default_lang));
 
-            match lang_translations {
-                Some(lt) => {
-                    let template = lt.get(key).cloned().unwrap_or_else(|| key.to_string());
-                    self.format_translation(template, params, lang).await
-                }
-                None => key.to_string(),
+        match lang_translations {
+            Some(lt) => {
+                let template = lt.get(key).cloned().unwrap_or_else(|| key.to_string());
+                self.format_translation(template, params, lang)
             }
-        })
+            None => key.to_string(),
+        }
     }
 
-    fn format_translation<'a>(
-        &'a self,
-        template: String,
-        params: &'a [TranslationParam],
-        lang: Language,
-    ) -> Pin<Box<dyn Future<Output = String> + Send + 'a>> {
-        Box::pin(async move {
-            let re = Regex::new(r"\{(\d+)}").unwrap();
-            let mut result = template;
-            let captures: Vec<_> = re.captures_iter(&result).collect();
-            
-            let mut result_clone = result.clone();
-            for cap in captures {
-                if let (Some(whole), Some(index_str)) = (cap.get(0), cap.get(1)) {
-                    if let Ok(index) = index_str.as_str().parse::<usize>() {
-                        if index < params.len() {
-                            let replacement = self.resolve_param(&params[index], lang).await;
-                            result_clone = result_clone.replace(whole.as_str(), &replacement);
-                        } else {
-                            println!("Index {} out of range for params", index);
-                        }
+    fn format_translation(&self, template: String, params: &[TranslationParam], lang: Language) -> String {
+        let re = Regex::new(r"\{(\d+)}").unwrap();
+        let mut result = template;
+
+        for cap in re.captures_iter(&result.clone()) {
+            if let (Some(whole), Some(index_str)) = (cap.get(0), cap.get(1)) {
+                if let Ok(index) = index_str.as_str().parse::<usize>() {
+                    if index < params.len() {
+                        let replacement = self.resolve_param(&params[index], lang);
+                        result = result.replace(whole.as_str(), &replacement);
                     }
                 }
             }
-            result = result_clone;
-            result
-        })
+        }
+        result
     }
 
-
-    fn resolve_param<'a>(
-        &'a self,
-        param: &'a TranslationParam,
-        lang: Language,
-    ) -> Pin<Box<dyn Future<Output = String> + Send + 'a>> {
-        Box::pin(async move {
-            match param {
-                TranslationParam::String(s) => s.clone(),
-                TranslationParam::Ref(tr) => {
-                    let params = tr.to_translation_params();
-                    self.get(&tr.key, lang, &params).await
-                }
-                TranslationParam::None => String::new(),
+    fn resolve_param(&self, param: &TranslationParam, lang: Language) -> String {
+        match param {
+            TranslationParam::String(s) => s.clone(),
+            TranslationParam::Ref(tr) => {
+                let params = tr.to_translation_params();
+                self.get(&tr.key, lang, &params)
             }
-        })
+            TranslationParam::None => String::new(),
+        }
     }
-
-
 
     pub async fn get_guild_language(&self, db: Arc<DbManager>, id: GuildId) -> Result<Language, ()> {
         use crate::database::schema::guild_settings::dsl::*;
@@ -259,6 +221,7 @@ impl LocalizationManager {
 
         Language::from_str(&result)
     }
+
 
     pub async fn set_guild_language(&self, db: Arc<DbManager>, id: GuildId, new_lang: Language) -> Result<(), diesel::result::Error> {
         use crate::database::schema::guild_settings::dsl::*;
@@ -279,16 +242,15 @@ impl LocalizationManager {
 
         Ok(())
     }
-    
-    pub async fn get_translated_lang_name(&self, lang: Language) -> String {
+
+    pub fn get_translated_lang_name(&self, lang: Language) -> String {
         let key = match lang {
             Language::English => "languages.en",
             Language::Polish => "languages.pl",
         };
-        self.get(key, lang, &[]).await
+        self.get(key, lang, &[])
     }
 }
-
 
 pub enum TranslationParam {
     String(String),

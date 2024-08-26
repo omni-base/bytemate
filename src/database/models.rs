@@ -9,15 +9,6 @@ pub struct GuildSettings {
     pub lang: String,
 }
 
-#[derive(Queryable, Selectable, Insertable, Clone, Debug)]
-#[diesel(table_name = crate::database::schema::logs)]
-#[diesel(check_for_backend(diesel::pg::Pg))]
-pub struct Logs {
-    pub id: i32,
-    pub guild_id: i64,
-    pub default_log_channel: Option<i64>,
-    pub log_types: i32,
-}
 
 #[derive(Queryable, Selectable, Insertable, Clone)]
 #[diesel(table_name = crate::database::schema::moderation_settings)]
@@ -25,6 +16,8 @@ pub struct Logs {
 pub struct ModerationSettings {
     pub guild_id: i64,
     pub warn_expire_time: i64,
+    pub default_log_channel: Option<i64>,
+    pub log_types: i32,
 }
 
 #[derive(Queryable, Selectable, Insertable, Clone, Debug)]

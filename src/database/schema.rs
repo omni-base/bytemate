@@ -36,18 +36,11 @@ diesel::table! {
 }
 
 diesel::table! {
-    logs (id) {
-        id -> Int4,
-        guild_id -> Int8,
-        default_log_channel -> Nullable<Int8>,
-        log_types -> Int4,
-    }
-}
-
-diesel::table! {
     moderation_settings (guild_id) {
         guild_id -> Int8,
         warn_expire_time -> Int8,
+        default_log_channel -> Nullable<Int8>,
+        log_types -> Int4,
     }
 }
 
@@ -57,6 +50,5 @@ diesel::allow_tables_to_appear_in_same_query!(
     _sqlx_migrations,
     cases,
     guild_settings,
-    logs,
     moderation_settings,
 );
