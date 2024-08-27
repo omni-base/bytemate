@@ -1,8 +1,11 @@
 use std::collections::HashMap;
 use std::fs;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::{Duration, SystemTime};
+use bincode::{config, Decode, Encode};
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use poise::serenity_prelude::GuildId;
@@ -11,8 +14,16 @@ use regex::Regex;
 use serde_yaml::Value;
 use crate::database::manager::DbManager;
 use crate::database::models::GuildSettings;
+use serde::{Serialize, Deserialize};
+use lazy_static::lazy_static;
+use rayon::prelude::*;
+lazy_static! {
+    static ref TRANSLATION_REGEX: Regex =
+    Regex::new(r"\{(\d+)\}").unwrap();
+}
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Decode, Encode)]
 pub enum Language {
     English,
     Polish,
@@ -47,9 +58,17 @@ impl FromStr for Language {
     }
 }
 
+#[derive(Serialize, Deserialize, Decode, Encode)]
+struct CachedTranslations {
+    translations: HashMap<Language, HashMap<String, String>>,
+    last_modified: SystemTime,
+}
+
 pub struct LocalizationManager {
     translations: Arc<RwLock<HashMap<Language, HashMap<String, String>>>>,
     default_lang: Language,
+    cache_path: PathBuf,
+    cache_duration: Duration,
 }
 
 #[derive(Clone)]
@@ -69,30 +88,68 @@ impl TranslationRef {
 }
 
 impl LocalizationManager {
-    pub fn new(default_lang: Language) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn new(default_lang: Language, cache_path: PathBuf, cache_duration: Duration) -> Result<Self, Box<dyn std::error::Error>> {
         let manager = LocalizationManager {
             translations: Arc::new(RwLock::new(HashMap::new())),
             default_lang,
+            cache_path,
+            cache_duration,
         };
         manager.load_translations()?;
         Ok(manager)
     }
 
     fn load_translations(&self) -> Result<(), Box<dyn std::error::Error>> {
-        let resources_dir = Path::new("bytemate-translations/resource");
-        let mut translations = HashMap::new();
-
-        let lang_dirs = self.find_language_dirs(resources_dir)?;
-
-        for (lang, lang_dir) in lang_dirs {
-            let lang_translations = self.load_language_translations(&lang_dir)?;
-            translations.insert(lang, lang_translations);
+        if let Ok(cached) = self.load_from_cache() {
+            *self.translations.write() = cached.translations;
+            return Ok(());
         }
 
+        let resources_dir = Path::new("bytemate-translations/resource");
+        let lang_dirs = self.find_language_dirs(resources_dir)?;
+
+        let translations: HashMap<_, _> = lang_dirs
+            .par_iter()
+            .map(|(lang, lang_dir)| {
+                let lang_translations = self.load_language_translations(lang_dir)
+                    .expect("Failed to load language translations");
+                (*lang, lang_translations)
+            })
+            .collect();
+
         let mut lock = self.translations.write();
-        *lock = translations;
+        *lock = translations.clone();
+        self.save_to_cache(&translations)?;
+
         Ok(())
     }
+
+    fn load_from_cache(&self) -> Result<CachedTranslations, Box<dyn std::error::Error>> {
+        let mut file = fs::File::open(&self.cache_path)?;
+        let mut buffer = Vec::new();
+        file.read_to_end(&mut buffer)?;
+
+        let (cached, _): (CachedTranslations, usize) = bincode::decode_from_slice(&buffer, config::standard())?;
+
+        if cached.last_modified.elapsed()? < self.cache_duration {
+            Ok(cached)
+        } else {
+            Err("Cache expired".into())
+        }
+    }
+
+    fn save_to_cache(&self, translations: &HashMap<Language, HashMap<String, String>>) -> Result<(), Box<dyn std::error::Error>> {
+        let cached = CachedTranslations {
+            translations: translations.clone(),
+            last_modified: SystemTime::now(),
+        };
+        let encoded: Vec<u8> = bincode::encode_to_vec(&cached, config::standard())?;
+        fs::write(&self.cache_path, encoded)?;
+        Ok(())
+    }
+
+    // ... (pozostałe metody bez zmian)
+
 
     fn find_language_dirs(&self, base_dir: &Path) -> Result<Vec<(Language, PathBuf)>, Box<dyn std::error::Error>> {
         let mut lang_dirs = Vec::new();
@@ -182,11 +239,11 @@ impl LocalizationManager {
         }
     }
 
+
     fn format_translation(&self, template: String, params: &[TranslationParam], lang: Language) -> String {
-        let re = Regex::new(r"\{(\d+)}").unwrap();
         let mut result = template;
 
-        for cap in re.captures_iter(&result.clone()) {
+        for cap in TRANSLATION_REGEX.captures_iter(&result.clone()) {
             if let (Some(whole), Some(index_str)) = (cap.get(0), cap.get(1)) {
                 if let Ok(index) = index_str.as_str().parse::<usize>() {
                     if index < params.len() {

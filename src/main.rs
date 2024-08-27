@@ -3,9 +3,10 @@
 #![feature(duration_constructors)]
 
 use std::{fs};
+use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use std::sync::atomic::{AtomicBool, Ordering};
-
+use std::time::Duration;
 use axum::{Json, Router};
 use axum::routing::get;
 use poise::serenity_prelude as serenity;
@@ -97,7 +98,7 @@ async fn main() {
         .data(Arc::new(Data {
             has_started: AtomicBool::new(false),
             db,
-            localization_manager: Arc::new(LocalizationManager::new(Language::English).unwrap()),
+            localization_manager: Arc::new(LocalizationManager::new(Language::English, PathBuf::from("translations_cache.bin"), Duration::from_secs(24 * 60 * 60)).unwrap()),
             global_commands: Arc::new(RwLock::new(Vec::new())),
             client_id: Arc::new(RwLock::new(UserId::default())),
         }) as _)

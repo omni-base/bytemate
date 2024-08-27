@@ -24,3 +24,4 @@ migrations
 node_modules
 
 .env
+/translations_cache.bin
