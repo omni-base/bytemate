@@ -7,25 +7,74 @@ use crate::{BotError, Context};
 pub(crate) const INTERACTION_TIMEOUT: Duration = Duration::from_secs(60);
 
 
-pub fn create_select_menu<'a>(custom_id: &'a str, options: Vec<(&'a str, &'a str)>, placeholder: &'a str) -> CreateActionRow<'a> {
+pub fn create_select_menu<'a, K>(
+    custom_id: &'a str,
+    options: Vec<(String, String)>,
+    placeholder: &'a str,
+    kind: K,
+) -> CreateActionRow<'a>
+where
+    K: Into<CreateSelectMenuKind<'a>>,
+{
+    let options = options.into_iter().map(|(name, value)|
+        CreateSelectMenuOption::new(name, value)).collect::<Vec<_>>();
+
+    let kind = match kind.into() {
+        CreateSelectMenuKind::String { .. } => CreateSelectMenuKind::String { options: options.into() },
+        CreateSelectMenuKind::Channel { channel_types, default_channels } => CreateSelectMenuKind::Channel {
+            channel_types,
+            default_channels,
+        },
+        CreateSelectMenuKind::Role { default_roles } => CreateSelectMenuKind::Role { default_roles },
+        CreateSelectMenuKind::Mentionable { default_users, default_roles } => CreateSelectMenuKind::Mentionable {
+            default_users,
+            default_roles,
+        },
+        CreateSelectMenuKind::User { default_users } => CreateSelectMenuKind::User { default_users },
+    };
+
     CreateActionRow::SelectMenu(
-        CreateSelectMenu::new(custom_id, CreateSelectMenuKind::String {
-            options: Cow::Owned(options.into_iter().map(|(name, value)|
-                CreateSelectMenuOption::new(name, value)).collect())
-        })
+        CreateSelectMenu::new(custom_id, kind)
             .placeholder(placeholder)
     )
 }
 
-pub fn create_select_menu_with_default<'a>(custom_id: &'a str, options: Vec<(&'a str, &'a str, bool)>, placeholder: &'a str) -> CreateActionRow<'a> {
+pub fn create_select_menu_with_default<'a, K>(
+    custom_id: &'a str,
+    options: Vec<(String, String, bool)>,
+    placeholder: &'a str,
+    kind: K,
+    max_values: Option<u8>,
+) -> CreateActionRow<'a>
+where
+    K: Into<CreateSelectMenuKind<'a>>,
+{
+    let options = options.into_iter().map(|(name, value, default)|
+        CreateSelectMenuOption::new(name, value).default_selection(default)).collect::<Vec<_>>();
+
+    let kind = match kind.into() {
+        CreateSelectMenuKind::String { .. } => CreateSelectMenuKind::String { options: options.into() },
+        CreateSelectMenuKind::Channel { channel_types, default_channels } => CreateSelectMenuKind::Channel {
+            channel_types,
+            default_channels,
+        },
+        CreateSelectMenuKind::Role { default_roles } => CreateSelectMenuKind::Role { default_roles },
+        CreateSelectMenuKind::Mentionable { default_users, default_roles } => CreateSelectMenuKind::Mentionable {
+            default_users,
+            default_roles,
+        },
+        CreateSelectMenuKind::User { default_users } => CreateSelectMenuKind::User { default_users },
+    };
+
     CreateActionRow::SelectMenu(
-        CreateSelectMenu::new(custom_id, CreateSelectMenuKind::String {
-            options: Cow::Owned(options.into_iter().map(|(name, value, default)|
-                CreateSelectMenuOption::new(name, value).default_selection(default)).collect())
-        })
+        CreateSelectMenu::new(custom_id, kind)
             .placeholder(placeholder)
+            .max_values(max_values.unwrap_or(1))
     )
 }
+
+
+
 
 
 pub async fn await_interaction(ctx: &Context<'_>, message: &Message, custom_id: &str) -> Option<ComponentInteraction> {
@@ -66,6 +115,14 @@ pub fn get_selected_value(interaction: &ComponentInteraction) -> Result<String, 
     match &interaction.data.kind {
         ComponentInteractionDataKind::StringSelect { values } => Ok(values[0].clone()),
         ComponentInteractionDataKind::ChannelSelect { values } => Ok(values[0].get().to_string().clone()),
+        _ => Err(BotError::from("Invalid interaction data kind"))
+    }
+}
+
+pub fn get_selected_values(interaction: &ComponentInteraction) -> Result<Vec<String>, BotError> {
+    match &interaction.data.kind {
+        ComponentInteractionDataKind::StringSelect { values } => Ok(Vec::from(values.clone())),
+        ComponentInteractionDataKind::ChannelSelect { values } => Ok(values.iter().map(|v| v.get().to_string()).collect()),
         _ => Err(BotError::from("Invalid interaction data kind"))
     }
 }

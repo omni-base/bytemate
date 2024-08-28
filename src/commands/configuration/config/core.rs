@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
-use poise::serenity_prelude::{ComponentInteraction, CreateEmbed, CreateInteractionResponse, CreateInteractionResponseMessage};
+use poise::serenity_prelude::{ComponentInteraction, CreateEmbed, CreateInteractionResponse, CreateInteractionResponseMessage, CreateSelectMenuKind};
 use crate::{BotError, Context};
 use crate::database::models::GuildSettings;
 use crate::localization::manager::{Language, LocalizationManager, TranslationParam};
@@ -16,10 +16,10 @@ pub async fn handle_core_config(ctx: Context<'_>, interaction: ComponentInteract
     
     interaction.create_response(ctx.http(), CreateInteractionResponse::UpdateMessage(
         CreateInteractionResponseMessage::default()
-            .embed(create_core_config_embed(&guild_table, lang, locales.clone()))
+            .embed(create_core_config_embed(lang, locales.clone()))
             .components(vec![create_select_menu("core_config", vec![
-                (&*locales.get("commands.configuration.core.bot_language.display_name", lang, &[]), "bot_language"),
-            ], &*locales.get("commands.configuration.config.placeholder.option", lang, &[]))])
+                (locales.get("commands.configuration.core.bot_language.display_name", lang, &[]), "bot_language".parse().unwrap()),
+            ], &locales.get("commands.configuration.config.placeholder.option", lang, &[]), CreateSelectMenuKind::String { options: Default::default() })])
     )).await?;
 
     if let Some(interaction) = await_interaction(&ctx, &interaction.message, "core_config").await {
@@ -41,7 +41,7 @@ async fn fetch_guild_settings(ctx: Context<'_>) -> GuildSettings {
     }).await.unwrap()
 }
 
-fn create_core_config_embed(guild_table: &GuildSettings, lang: Language, locales: Arc<LocalizationManager>) -> CreateEmbed {
+fn create_core_config_embed(lang: Language, locales: Arc<LocalizationManager>) -> CreateEmbed<'static> {
     CreateEmbed::new()
         .title(locales.get("commands.configuration.config.embed_title", lang, &[]))
         .color(BotColors::Default.color())
@@ -56,9 +56,9 @@ async fn edit_bot_language(ctx: Context<'_>, locales: Arc<LocalizationManager>, 
                 .title(locales.get("commands.configuration.core.bot_language.set.title", Language::from_str(&guild_settings.lang).unwrap(), &[]))
                 .description(locales.get("commands.configuration.core.bot_language.set.description", Language::from_str(&guild_settings.lang).unwrap(), &[])).color(BotColors::Default.color()))
             .components(vec![create_select_menu_with_default("bot_language", vec![
-                (&*locales.get("languages.pl", Language::from_str(&guild_settings.lang).unwrap(), &[]), "pl", guild_settings.lang == "pl"),
-                (&*locales.get("languages.en", Language::from_str(&guild_settings.lang).unwrap(), &[]), "en", guild_settings.lang == "en")
-            ], &*locales.get("commands.configuration.core.bot_language.set.placeholder", Language::from_str(&guild_settings.lang).unwrap(), &[]))])
+                (locales.get("languages.pl", Language::from_str(&guild_settings.lang).unwrap(), &[]), "pl".parse().unwrap(), guild_settings.lang == "pl"),
+                (locales.get("languages.en", Language::from_str(&guild_settings.lang).unwrap(), &[]), "en".parse().unwrap(), guild_settings.lang == "en")
+            ], &locales.get("commands.configuration.core.bot_language.set.placeholder", Language::from_str(&guild_settings.lang).unwrap(), &[]), CreateSelectMenuKind::String { options: Default::default() }, None)])
     )).await?;
     if let Some(interaction) = await_interaction(&ctx, &interaction.message, "bot_language").await {
         let selected_lang = get_selected_value(&interaction)?;

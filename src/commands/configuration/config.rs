@@ -1,10 +1,7 @@
-use std::borrow::Cow;
-use std::time::Duration;
 use diesel::{ExpressionMethods, QueryDsl};
-use diesel_async::RunQueryDsl;
 use crate::{BotError, Context};
 use poise::{command, send_reply, CreateReply};
-use poise::serenity_prelude::CreateEmbed;
+use poise::serenity_prelude::{CreateEmbed, CreateSelectMenuKind};
 use crate::localization::manager::TranslationParam;
 use crate::util::color::BotColors;
 use crate::util::interaction::{await_interaction, create_select_menu, get_selected_value};
@@ -29,10 +26,10 @@ pub async fn config(ctx: Context<'_>) -> Result<(), BotError> {
 
     let reply = send_reply(ctx, CreateReply::new()
         .embed(create_config_embed(embed_title, embed_description))
-        .components(vec![create_select_menu("config_module", vec![
-            (&*locales.get("commands.configuration.config.core", guild_lang, &[]), "core"),
-            (&*locales.get("commands.configuration.config.moderation", guild_lang, &[]), "moderation")
-        ], &*locales.get("commands.configuration.config.placeholder.module", guild_lang, &[]))])
+        .components(vec![create_select_menu(&"config_module".to_string(), vec![
+            (locales.get("commands.configuration.config.core", guild_lang, &[]), "core".parse().unwrap()),
+            (locales.get("commands.configuration.config.moderation", guild_lang, &[]), "moderation".parse().unwrap())
+        ], &locales.get("commands.configuration.config.placeholder.module", guild_lang, &[]), CreateSelectMenuKind::String { options: Default::default() })])
     ).await?;
 
     let message = reply.message().await?;

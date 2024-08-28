@@ -1,4 +1,5 @@
 use std::ops::BitAnd;
+use std::str::FromStr;
 use chrono::Utc;
 use diesel::{ExpressionMethods};
 use poise::serenity_prelude::{CacheHttp, ChannelId, Context, CreateEmbed, CreateEmbedAuthor, CreateEmbedFooter, CreateMessage, GuildId, Timestamp, UserId};
@@ -8,8 +9,8 @@ use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use crate::localization::manager::{Language, LocalizationManager};
 use crate::util::color::BotColors;
-
-#[derive(Debug, Clone, Copy)]
+use strum_macros::EnumIter;
+#[derive(Debug, Clone, Copy, EnumIter)]
 #[repr(u32)]
 pub enum LogType {
     ClearMessages = 1 << 0,      // 00000001
@@ -73,6 +74,17 @@ pub fn get_active_log_types(mask: u32, manager: &LocalizationManager, lang: Lang
     active_types
 }
 
+pub fn string_to_log_type(s: &str, manager: &LocalizationManager, lang: Language) -> Option<LogType> {
+    LogType::from_str(s).ok().or_else(|| {
+        [LogType::ClearMessages, LogType::ClearChannel, LogType::Mute, LogType::Unmute,
+            LogType::Kick, LogType::Lock, LogType::Unlock, LogType::Ban, LogType::Unban,
+            LogType::Warn, LogType::RemoveWarn, LogType::RemoveMultipleWarns]
+            .iter()
+            .find(|&log_type| log_type.to_string(manager, lang) == s)
+            .copied()
+    })
+}
+
 #[derive(Default)]
 pub struct LogData<'a> {
     pub ctx: Option<&'a Context>,
@@ -106,6 +118,28 @@ impl<'a> LogData<'a> {
             messages_deleted: None,
             messages: None,
             removed_warns: None,
+        }
+    }
+}
+
+impl FromStr for LogType {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "ClearMessages" => Ok(LogType::ClearMessages),
+            "ClearChannel" => Ok(LogType::ClearChannel),
+            "Mute" => Ok(LogType::Mute),
+            "Unmute" => Ok(LogType::Unmute),
+            "Kick" => Ok(LogType::Kick),
+            "Lock" => Ok(LogType::Lock),
+            "Unlock" => Ok(LogType::Unlock),
+            "Ban" => Ok(LogType::Ban),
+            "Unban" => Ok(LogType::Unban),
+            "Warn" => Ok(LogType::Warn),
+            "RemoveWarn" => Ok(LogType::RemoveWarn),
+            "RemoveMultipleWarns" => Ok(LogType::RemoveMultipleWarns),
+            _ => Err(()),
         }
     }
 }

@@ -118,7 +118,7 @@ pub async fn ban(
         points: None
     };
 
-    let _ = data.db.run(|conn| {
+    data.db.run(|conn| {
         diesel::insert_into(cases::table())
             .values(&new_case)
             .execute(conn)
