@@ -20,6 +20,6 @@ impl DbManager {
         Fut: Future<Output = Result<R, diesel::result::Error>>,
     {
         let mut conn = self.connection.lock().await;
-        f(&mut *conn).await
+        f(&mut conn).await
     }
 }
