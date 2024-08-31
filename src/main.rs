@@ -16,6 +16,7 @@ use crate::commands::configuration::config;
 use crate::commands::utils::*;
 use crate::commands::moderation::*;
 use crate::database::manager::DbManager;
+use crate::events::handle_event;
 use crate::localization::manager::{Language, LocalizationManager};
 use crate::modules::moderation::notifications::notification_loop;
 
@@ -27,6 +28,7 @@ pub mod database {
 
     pub mod upsert;
 }
+
 
 pub mod util {
     
@@ -48,8 +50,7 @@ pub mod localization {
     pub mod manager;
 }
 pub mod commands;
-
-
+mod events;
 
 #[derive(Deserialize)]
 struct Config {
@@ -78,7 +79,7 @@ async fn main() {
     
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
-            event_handler: |framework, event| Box::pin(event_handler(framework, event)),
+            event_handler: |framework, event| Box::pin(handle_event(framework, event)),
             commands: vec![
                 ban::ban(), kick::kick(), mute::mute(), unmute::unmute(),
                 help::help(), cases::cases(), clear::clear(), channel::channel(),
@@ -131,59 +132,4 @@ async fn create_api_server(ctx: Arc<serenity::Cache>) {
     println!("API server listening on: {}", listener.local_addr().unwrap());
     axum::serve(listener, app).await.unwrap();
 
-}
-
-async fn event_handler(
-    framework: poise::FrameworkContext<'_, Data, BotError>,
-    event: &serenity::FullEvent,
-) -> Result<(), BotError> {
-    match event {
-        serenity::FullEvent::Ready { data_about_bot, .. } => {
-            let data = framework.user_data();
-            let ctx = Arc::new(framework.serenity_context.clone());
-
-            if !data.has_started.load(Ordering::Relaxed) {
-                let commands = &framework.options().commands;
-                poise::builtins::register_globally(ctx.http(), commands).await?;
-                println!("Successfully registered slash commands!");
-
-                let global_commands = ctx.http().get_global_commands().await?;
-                    
-                {
-                    let mut global_commands_lock = data.global_commands.write().unwrap();
-                    *global_commands_lock = global_commands;
-                }
-                
-
-                data.has_started.store(true, Ordering::Relaxed);
-                *data.client_id.write().unwrap() = data_about_bot.user.id;
-                println!("Logged in as {}", data_about_bot.user.name);
-
-                let data_about_bot = data_about_bot.clone();
-                let data_clone = data.clone();
-                tokio::spawn(async move { notification_loop(data_clone, ctx, data_about_bot).await });
-            }
-        },
-        serenity::FullEvent::Message { new_message } => {
-            let client_id = framework.user_data().client_id.read().unwrap().to_string();
-            if new_message.content.contains(&format!("<@{}>", client_id)) {
-                new_message.reply(framework.serenity_context.http(), "Hello!").await?;
-            }
-        },
-        serenity::FullEvent::CacheReady { guilds} => {
-            let data = framework.user_data();
-            let db = data.db.clone();
-            database::upsert::upsert_database(db, guilds).await?;
-        },
-        serenity::FullEvent::GuildCreate { guild, is_new } => {
-            let data = framework.user_data();
-            let db = data.db.clone();
-            if is_new.expect("Expected a boolean value for is_new") {
-                let guild_ids = vec![guild.id];
-                database::upsert::upsert_database(db, &guild_ids).await?;
-            }
-        }
-        _ => {}
-    }
-    Ok(())
 }
