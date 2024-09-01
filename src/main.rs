@@ -5,12 +5,12 @@
 use std::{fs};
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool};
 use std::time::Duration;
 use axum::{Json, Router};
 use axum::routing::get;
 use poise::serenity_prelude as serenity;
-use poise::serenity_prelude::{CacheHttp, Command, UserId};
+use poise::serenity_prelude::{Command, UserId};
 use serde::{Deserialize, Serialize};
 use crate::commands::configuration::config;
 use crate::commands::utils::*;
@@ -18,7 +18,6 @@ use crate::commands::moderation::*;
 use crate::database::manager::DbManager;
 use crate::events::handle_event;
 use crate::localization::manager::{Language, LocalizationManager};
-use crate::modules::moderation::notifications::notification_loop;
 
 pub mod database {
     pub mod schema;

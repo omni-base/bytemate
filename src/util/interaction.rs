@@ -1,4 +1,3 @@
-use std::borrow::Cow;
 use std::time::Duration;
 use poise::serenity_prelude::{ActionRowComponent, ComponentInteraction, ComponentInteractionDataKind, CreateActionRow, CreateSelectMenu, CreateSelectMenuKind, CreateSelectMenuOption, InputText, Message, ModalInteraction};
 use poise::serenity_prelude::small_fixed_array::FixedArray;

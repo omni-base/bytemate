@@ -1,4 +1,3 @@
-use diesel::{ExpressionMethods, QueryDsl};
 use crate::{BotError, Context};
 use poise::{command, send_reply, CreateReply};
 use poise::serenity_prelude::{CreateEmbed, CreateSelectMenuKind};
