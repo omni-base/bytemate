@@ -10,6 +10,9 @@ use diesel_async::RunQueryDsl;
 use crate::localization::manager::{Language, LocalizationManager};
 use crate::util::color::BotColors;
 use strum_macros::EnumIter;
+
+
+// todo: DeleteMessage, EditedMessage
 #[derive(Debug, Clone, Copy, EnumIter)]
 #[repr(u32)]
 pub enum LogType {
@@ -46,6 +49,29 @@ impl LogType {
     }
     pub fn as_bit(&self) -> u32 {
         *self as u32
+    }
+}
+
+
+impl FromStr for LogType {
+    type Err = BotError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "ClearMessages" => Ok(LogType::ClearMessages),
+            "ClearChannel" => Ok(LogType::ClearChannel),
+            "Mute" => Ok(LogType::Mute),
+            "Unmute" => Ok(LogType::Unmute),
+            "Kick" => Ok(LogType::Kick),
+            "Lock" => Ok(LogType::Lock),
+            "Unlock" => Ok(LogType::Unlock),
+            "Ban" => Ok(LogType::Ban),
+            "Unban" => Ok(LogType::Unban),
+            "Warn" => Ok(LogType::Warn),
+            "RemoveWarn" => Ok(LogType::RemoveWarn),
+            "RemoveMultipleWarns" => Ok(LogType::RemoveMultipleWarns),
+            _ => Err(BotError::from("Invalid log type")),
+        }
     }
 }
 
@@ -100,6 +126,8 @@ pub struct LogData<'a> {
     pub messages_deleted: Option<u32>,
     pub messages: Option<Vec<String>>,
     pub removed_warns: Option<Vec<(UserId, i32, i32)>>,
+    pub old_message: Option<String>,
+    pub message: Option<String>
 }
 
 impl<'a> LogData<'a> {
@@ -118,31 +146,12 @@ impl<'a> LogData<'a> {
             messages_deleted: None,
             messages: None,
             removed_warns: None,
+            old_message: None,
+            message: None,
         }
     }
 }
 
-impl FromStr for LogType {
-    type Err = ();
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "ClearMessages" => Ok(LogType::ClearMessages),
-            "ClearChannel" => Ok(LogType::ClearChannel),
-            "Mute" => Ok(LogType::Mute),
-            "Unmute" => Ok(LogType::Unmute),
-            "Kick" => Ok(LogType::Kick),
-            "Lock" => Ok(LogType::Lock),
-            "Unlock" => Ok(LogType::Unlock),
-            "Ban" => Ok(LogType::Ban),
-            "Unban" => Ok(LogType::Unban),
-            "Warn" => Ok(LogType::Warn),
-            "RemoveWarn" => Ok(LogType::RemoveWarn),
-            "RemoveMultipleWarns" => Ok(LogType::RemoveMultipleWarns),
-            _ => Err(()),
-        }
-    }
-}
 
 impl BitAnd<LogType> for i32 {
     type Output = bool;
@@ -281,6 +290,25 @@ async fn create_log_embed(log_type: &LogType, log_data: &LogData<'_>) -> CreateE
                 format!("`Warnings Removed:` \n{}", warn_list),
             )
         },
+        // LogType::DeletedMessage => (
+        //     "Message Deleted".to_string(),
+        //     format!(
+        //         "`User:` <@{}> \n`Channel:` <#{}> \n`Message:` {}",
+        //         log_data.user_id.unwrap(),
+        //         log_data.channel_id.unwrap(),
+        //         log_data.message.as_deref().unwrap_or("Could not log message")
+        //     ),
+        // ),
+        // LogType::EditedMessage => (
+        //     "Message Edited".to_string(),
+        //     format!(
+        //         "`User:` <@{}> \n`Channel:` <#{}> \n`Old Message:` {} \n`New Message:` {}",
+        //         log_data.user_id.unwrap(),
+        //         log_data.channel_id.unwrap(),
+        //         log_data.old_message.as_deref().unwrap_or("Could not log old message"),
+        //         log_data.message.as_deref().unwrap_or("Could not log new message")
+        //     ),
+        // ),
     };
 
     let author = log_data.moderator_id.unwrap().to_user(log_data.ctx.unwrap().http()).await.unwrap();

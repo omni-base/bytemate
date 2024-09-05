@@ -147,10 +147,7 @@ impl LocalizationManager {
         fs::write(&self.cache_path, encoded)?;
         Ok(())
     }
-
-    // ... (pozostałe metody bez zmian)
-
-
+    
     fn find_language_dirs(&self, base_dir: &Path) -> Result<Vec<(Language, PathBuf)>, Box<dyn std::error::Error>> {
         let mut lang_dirs = Vec::new();
 

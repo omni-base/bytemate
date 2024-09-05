@@ -3,6 +3,11 @@ mod message;
 mod cache_ready;
 mod guild_create;
 
+
+mod message_delete;
+
+mod message_update;
+
 use poise::serenity_prelude as serenity;
 use crate::Data;
 use crate::BotError;

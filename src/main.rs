@@ -10,7 +10,7 @@ use std::time::Duration;
 use axum::{Json, Router};
 use axum::routing::get;
 use poise::serenity_prelude as serenity;
-use poise::serenity_prelude::{Command, UserId};
+use poise::serenity_prelude::{Command, Settings, UserId};
 use serde::{Deserialize, Serialize};
 use crate::commands::configuration::config;
 use crate::commands::utils::*;
@@ -92,6 +92,10 @@ async fn main() {
 
     let db = Arc::new(DbManager::new(&config.database_url).await.unwrap());
 
+    let mut settings = Settings::default();
+    settings.max_messages = 1000;
+    
+    
     let mut client = serenity::ClientBuilder::new(&config.token, serenity::GatewayIntents::all())
         .framework(framework)
         .activity(poise::serenity_prelude::ActivityData::custom("𝗜'𝗠 𝗧𝗛𝗘 𝗠𝗘𝗢𝗪 𝗠𝗢𝗗𝗘𝗥𝗔𝗧𝗢𝗥"))
@@ -102,6 +106,7 @@ async fn main() {
             global_commands: Arc::new(RwLock::new(Vec::new())),
             client_id: Arc::new(RwLock::new(UserId::default())),
         }) as _)
+        .cache_settings(settings)
         .await.unwrap();
 
     
